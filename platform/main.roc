@@ -2,7 +2,7 @@ platform "webserver"
     requires { Model } { main : _ }
     exposes []
     packages {}
-    imports [Webserver.{ Event, Request, Response }]
+    imports [Webserver.{ Request, Response }]
     provides [mainForHost]
 
 ProgramForHost : {

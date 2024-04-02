@@ -1,15 +1,11 @@
 interface Webserver
     exposes [
-        Event,
         Request,
         Response,
-        Command,
         Header,
         RequestBody,
     ]
     imports []
-
-Event : List U8
 
 # Request is the same as: https://github.com/roc-lang/basic-webserver/blob/main/platform/InternalHttp.roc
 Request : {
@@ -27,8 +23,6 @@ Response : {
 }
 
 Header : { name : Str, value : Str }
-
-Command : [AddEvent Event, PrintThisNumber I64]
 
 RequestBody : [
     Body { mimeType : Str, body : List U8 },

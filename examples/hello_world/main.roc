@@ -2,7 +2,7 @@ app "hello_world"
     packages {
         webserver: "../../platform/main.roc",
     }
-    imports [webserver.Webserver.{ Event, Request, Response }]
+    imports [webserver.Webserver.{ Request, Response }]
     provides [main, Model] to webserver
 
 Program : {
