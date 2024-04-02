@@ -1,0 +1,44 @@
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  libapp_so:
+    cmds:
+      - roc build --lib examples/hello_world/main.roc --output platform/libapp.so
+    sources:
+      - examples/hello_world/main.roc
+    generates:
+      - platform/libapp.so
+
+  dynhost:
+    cmds:
+      - CC="zig cc" go build -C platform -buildmode=pie -o dynhost
+    sources:
+      - platform/main.go
+      - "platform/*/*.go"
+      - platform/roc/host.h
+      - platform/libapp.so
+    generates:
+      - platform/dynhost
+    deps:
+      - libapp_so
+
+  preprocess:
+    cmds:
+      - roc preprocess-host examples/hello_world/main.roc
+      - rm platform/libapp.so
+    sources:
+      - platform/dynhost
+    generates:
+      - platform/linux-x64.rh
+      - platform/metadata_linux_x64.rm
+    deps:
+      - dynhost
+    
+  run:
+    cmds:
+      - roc run --prebuilt-platform examples/hello_world/main.roc
+    deps:
+      - preprocess
+    
