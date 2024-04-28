@@ -7,5 +7,5 @@ platform/*tar.br
 examples/hello_world/main
 .task
 
-db.events
+db.requests
 db.snapshot
