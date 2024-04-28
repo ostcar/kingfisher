@@ -6,13 +6,13 @@ app "hello_world"
     provides [main, Model] to webserver
 
 Program : {
-    decodeModel : [Init, Exist (List U8)] -> Model,
+    decodeModel : [Init, Existing (List U8)] -> Model,
     encodeModel : Model -> List U8,
     handleReadRequest : Request, Model -> Response,
     handleWriteRequest : Request, Model -> (Response, Model),
 }
 
-Model : List U8
+Model : Str
 
 main : Program
 main = {
@@ -22,22 +22,24 @@ main = {
     handleWriteRequest,
 }
 
-decodeModel : [Init, Exist (List U8)] -> Model
+decodeModel : [Init, Existing (List U8)] -> Model
 decodeModel = \fromPlatform ->
     when fromPlatform is
         Init ->
-            "World" |> Str.toUtf8
+            "World"
 
-        Exist encoded ->
-            encoded
+        Existing encoded ->
+            when encoded |> Str.fromUtf8 is
+                Ok model -> model
+                Err _ -> crash "Error: Can not decode database."
 
 encodeModel : Model -> List U8
 encodeModel = \model ->
-    model
+    model |> Str.toUtf8
 
 handleReadRequest : Request, Model -> Response
 handleReadRequest = \_request, model -> {
-    body: "Hello " |> Str.toUtf8 |> List.concat model |> List.append '\n',
+    body: "Hello $(model)\n" |> Str.toUtf8,
     headers: [],
     status: 200,
 }
@@ -46,11 +48,11 @@ handleWriteRequest : Request, Model -> (Response, Model)
 handleWriteRequest = \request, _model ->
     model =
         when request.body is
-            EmptyBody -> "World" |> Str.toUtf8
-            Body b -> b.body
+            EmptyBody -> "World"
+            Body b -> b.body |> Str.fromUtf8 |> Result.withDefault "invalid body"
     (
         {
-            body: model,
+            body: model |> Str.toUtf8,
             headers: [],
             status: 200,
         },

@@ -6,7 +6,7 @@ platform "webserver"
     provides [mainForHost]
 
 ProgramForHost : {
-    decodeModel : [Init, Exist (List U8)] -> Box Model,
+    decodeModel : [Init, Existing (List U8)] -> Box Model,
     encodeModel : Box Model -> List U8,
     handleReadRequest : Request, Box Model -> Response,
     handleWriteRequest : Request, Box Model -> (Response, Box Model),
@@ -20,7 +20,7 @@ mainForHost = {
     handleWriteRequest,
 }
 
-decodeModel : [Init, Exist (List U8)] -> Box Model
+decodeModel : [Init, Existing (List U8)] -> Box Model
 decodeModel = \fromHost ->
     main.decodeModel fromHost
     |> Box.box
