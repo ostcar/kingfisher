@@ -26,9 +26,9 @@ func main() {
 }
 
 type cliConfig struct {
-	Addr         string `help:"Address to listen to." default:":8090"`
-	SnapshotFile string `help:"path to the snapshot file." default:"db.snapshot" type:"path"`
-	EventFile    string `help:"path to the event file." default:"db.events" type:"path"`
+	Addr         string `help:"Address to listen on." default:":8090"`
+	SnapshotFile string `help:"Path to the snapshot file." default:"db.snapshot" type:"path"`
+	EventFile    string `help:"Path to the event file." default:"db.events" type:"path"`
 }
 
 func run(cli cliConfig) (err error) {

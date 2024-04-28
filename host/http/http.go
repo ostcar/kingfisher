@@ -32,9 +32,9 @@ func Run(ctx context.Context, addr string, r *roc.Roc, db database.Database) err
 		wait <- nil
 	}()
 
-	log.Printf("Listen webserver on: %s", addr)
+	log.Printf("Webserver is listening on: %s", addr)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		return fmt.Errorf("HTTP Server failed: %v", err)
+		return fmt.Errorf("HTTP server failed: %v", err)
 	}
 
 	return <-wait
