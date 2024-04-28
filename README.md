@@ -3,13 +3,17 @@
 Kingfisher is a webserver platform for the [Roc
 language](https://www.roc-lang.org/).
 
-It lets you build websites, by defining your own Model. The model is hold in
+It lets you build websites by defining your own Model. The model is hold in
 memory and saved on disk.
+
+Kingfisher follows a very minimalistic approach. You do not have to deal with
+Tasks, SQL and I/O. Just write your views for read and write requests. Use a
+model structure as you like and don't care about database tables and queries.
 
 
 ## How to use it
 
-Use the platform, with the following roc-application-header:
+Use the platform with the following roc-application-header:
 
 ```roc
 app "hello_world"
@@ -18,22 +22,24 @@ app "hello_world"
     }
     imports [webserver.Webserver.{ Request, Response }]
     provides [main, Model] to webserver
-
 ```
 
-The platform requires a `Model`. The `Model`, can be any valid roc type. For example
+The platform requires a `Model`. The `Model` can be any valid roc type. For
+example:
 
-```
+```roc
 Model : {
     modelVersion: U64,
     users: List User,
     admin: [NoAdmin, Admin Str],
+    books: List Str,
+    specialOption: Bool,
 }
 ```
 
 The platform needs four functions:
 
-```
+```roc
 Program : {
     decodeModel : [Init, Existing (List U8)] -> Model,
     encodeModel : Model -> List U8,
@@ -52,33 +58,45 @@ main = {
 
 * **decodeModel**: `decodeModel` is called when the server starts. On the first
   run, it is called with `Init` and on every other start with `Existing
-  encodedModel` where `encodedModel` is an representation of the `Model`. The
-  function has to create the initial model or decode the model from the data.
+  encodedModel` where `encodedModel` is a byte representation of the `Model`.
+  The function has to create the initial model or decode the model from the
+  given bytes.
+
 * **encodeModel**: `encodeModel` is the counterpart of `decodeModel`. It has to
   create a byte representation of the `Model`.
 
-`decodeModel` and `encodeModel` are used to create a snapshot of the `Model`,
-and persist it on disk. The functions can also be use to migrate an older
-version of a model.
+`decodeModel` and `encodeModel` are used to create a snapshot of the `Model` and
+persist it on disk. The functions can also be used to migrate an older version
+of a model.
 
 * **handleReadRequest**: `handleReadRequest` is called for HTTP requests, that
-  can not update the `Model`. The function is called with the `Request` and the
-  `Model` and has to return a `Response`.
-* **handleWriteRequest**: `handleWriteRequest` is called for HTTP request, that
+  are readonly and can not update the `Model`. The function is called with the
+  `Request` and the `Model` and has to return a `Response`.
+
+* **handleWriteRequest**: `handleWriteRequest` is called for HTTP requests, that
   can update the `Model`. The signature is simular then `handleReadRequest`, but
   it also returns a new `Model`.
 
 The platform makes the distinction between a read and a write request on the
-HTTP method. `Post`, `PUT`, `PATCH` and `DELETE` requests are write requests.
-All other are read requests. This means, that a `GET` request can not alter the
-Model.
+HTTP method. `POST`, `PUT`, `PATCH` and `DELETE` requests are write requests.
+All other methods are read requests. This means, that a `GET` request can not
+alter the Model.
 
 The platform can handle many read requests at the same time. But there can only
 be one concurent write request. When a write request is processed, all other
 write request and all read requests have to wait.
 
-Each write request gets persisted on disk. On server failer, the logged write
-requests are used, to recreate the `Model`.
+When the server is shut down, it calls `encodeModel` and saves the snapshot to
+disk. On restart, the snapshot is loaded to the server has the `Model` in memory
+again.
+
+Additionally each write request gets persisted on disk. On server failure, the
+logged write requests are used to recreate the `Model` (the server just calls
+the respective roc functions again).
+
+After you have build your app, you can run your binary with the option `--help`
+to see all available runtime options like listening address and path of the
+snapshot file.
 
 
 ## Build the platform
@@ -86,14 +104,17 @@ requests are used, to recreate the `Model`.
 The easiest way to build the platform is with [Task](https://taskfile.dev/).
 
 Run:
-```
-task preprocess
-```
+
+    task preprocess
 
 to preprocess the platform.
 
 Afterwards, the example can be run with:
 
-```
-roc run --prebuilt-platform examples/hello_world/main.roc
-```
+    roc run --prebuilt-platform examples/hello_world/main.roc
+
+
+
+## License
+
+MIT

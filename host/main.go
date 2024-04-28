@@ -28,7 +28,7 @@ func main() {
 type cliConfig struct {
 	Addr         string `help:"Address to listen on." default:":8090"`
 	SnapshotFile string `help:"Path to the snapshot file." default:"db.snapshot" type:"path"`
-	RequestsFile string `help:"Path to the event file." default:"db.requests" type:"path"`
+	RequestsFile string `help:"Path to the requests file." default:"db.requests" type:"path"`
 }
 
 func run(cli cliConfig) (err error) {
