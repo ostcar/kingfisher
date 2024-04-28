@@ -10,22 +10,34 @@ import (
 	"webserver/database"
 	"webserver/http"
 	"webserver/roc"
+
+	"github.com/alecthomas/kong"
 )
 
 func main() {
-	if err := run(); err != nil {
-		fmt.Printf("Error: %v", err)
+	var cli cliConfig
+
+	kong.Parse(&cli, kong.UsageOnError())
+
+	if err := run(cli); err != nil {
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run() (err error) {
+type cliConfig struct {
+	Addr         string `help:"Address to listen to." default:":8090"`
+	SnapshotFile string `help:"path to the snapshot file." default:"db.snapshot" type:"path"`
+	EventFile    string `help:"path to the event file." default:"db.events" type:"path"`
+}
+
+func run(cli cliConfig) (err error) {
 	ctx, cancel := interruptContext()
 	defer cancel()
 
 	db := database.FileDB{
-		EventFile:    "db.events",
-		SnapshotFile: "db.snapshot",
+		EventFile:    cli.EventFile,
+		SnapshotFile: cli.SnapshotFile,
 	}
 
 	reader, err := db.EventReader()
@@ -49,7 +61,7 @@ func run() (err error) {
 		}
 	}()
 
-	return http.Run(ctx, ":8090", r, db)
+	return http.Run(ctx, cli.Addr, r, db)
 }
 
 // interruptContext works like signal.NotifyContext
