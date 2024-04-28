@@ -18,7 +18,7 @@ Use the platform with the following roc-application-header:
 ```roc
 app "hello_world"
     packages {
-        webserver: "https://github.com/ostcar/kingfisher/releases/download/v0.0.1/DyE2hmSORHg6McbXh2T92yUjL7edUi2m6ZjiC2ypqfQ.tar.br",
+        webserver: "https://github.com/ostcar/kingfisher/releases/download/v0.0.1/GJKdBN6nFVo5QW7t66X3vJLGmPmjd5qfmqcS5y9V7M0.tar.br",
     }
     imports [webserver.Webserver.{ Request, Response }]
     provides [main, Model] to webserver
