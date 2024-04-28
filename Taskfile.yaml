@@ -5,20 +5,20 @@ version: '3'
 tasks:
   libapp_so:
     cmds:
-      - roc build --lib examples/hello_world/main.roc --output platform/libapp.so
+      - roc build --lib examples/hello_world/main.roc --output host/libapp.so
     sources:
       - examples/hello_world/main.roc
     generates:
-      - platform/libapp.so
+      - host/libapp.so
 
   dynhost:
     cmds:
-      - CC="zig cc" go build -C platform -buildmode=pie -o dynhost
+      - CC="zig cc" go build -C host -buildmode=pie -o ../platform/dynhost
     sources:
-      - platform/main.go
-      - "platform/*/*.go"
-      - platform/roc/host.h
-      - platform/libapp.so
+      - host/main.go
+      - "host/*/*.go"
+      - host/roc/host.h
+      - host/libapp.so
     generates:
       - platform/dynhost
     deps:

@@ -1,5 +1,6 @@
-platform/libapp.so
+host/libapp.so
 platform/dynhost
+platform/libapp.so
 platform/*.rh
 platform/*.rm
 platform/*tar.br
