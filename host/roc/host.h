@@ -12,10 +12,6 @@ struct RocList {
     size_t capacity;
 };
 
-struct Program {
-    void* init;
-};
-
 struct BodyMimeType {
     struct RocStr body;
     struct RocStr mimeType;
@@ -63,10 +59,23 @@ struct ResponseModel {
     void* *model;
 };
 
-extern void roc__mainForHost_1_exposed_generic(const struct Program *program);
+union DecodeArgUnion {
+    struct RocList bytes;
+};
+
+struct DecodeArg {
+    union DecodeArgUnion payload;
+    unsigned char discriminant;
+};
+
+// decodeModel
+extern void roc__mainForHost_0_caller(const struct DecodeArg *arg, void* something, void* *model);
+
+// encodeModel
+extern void roc__mainForHost_1_caller(void* *model, void* something, struct RocList *bytes);
 
 // handleReadRequest
-extern void roc__mainForHost_0_caller(const struct Request *request, void* *model,  void* something, const struct Response *response );
+extern void roc__mainForHost_2_caller(const struct Request *request, void* *model,  void* something, const struct Response *response );
 
 // handleWriteRequest
-extern void roc__mainForHost_1_caller(const struct Request *request, void* *model,  void* something, const struct ResponseModel *responseModel );
+extern void roc__mainForHost_3_caller(const struct Request *request, void* *model,  void* something, const struct ResponseModel *responseModel );

@@ -6,7 +6,8 @@ app "hello_world"
     provides [main, Model] to webserver
 
 Program : {
-    init : Model,
+    decodeModel : [Init, Exist (List U8)] -> Model,
+    encodeModel : Model -> List U8,
     handleReadRequest : Request, Model -> Response,
     handleWriteRequest : Request, Model -> (Response, Model),
 }
@@ -14,11 +15,25 @@ Program : {
 Model : List U8
 
 main : Program
-main = { init, handleReadRequest, handleWriteRequest }
+main = {
+    decodeModel,
+    encodeModel,
+    handleReadRequest,
+    handleWriteRequest,
+}
 
-init : Model
-init =
-    "World" |> Str.toUtf8
+decodeModel : [Init, Exist (List U8)] -> Model
+decodeModel = \fromPlatform ->
+    when fromPlatform is
+        Init ->
+            "World" |> Str.toUtf8
+
+        Exist encoded ->
+            encoded
+
+encodeModel : Model -> List U8
+encodeModel = \model ->
+    model
 
 handleReadRequest : Request, Model -> Response
 handleReadRequest = \_request, model -> {

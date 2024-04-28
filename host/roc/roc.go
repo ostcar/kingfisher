@@ -26,10 +26,29 @@ type Roc struct {
 }
 
 // New initializes the connection to roc.
-func New(reader io.Reader) (*Roc, error) {
-	var program C.struct_Program
-	C.roc__mainForHost_1_exposed_generic(&program)
-	model := program.init
+func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
+	var model unsafe.Pointer
+	var decodeArg C.struct_DecodeArg
+	decodeArg.discriminant = 1 // Init
+	if encodedModel != nil {
+		decodeArg.discriminant = 0 // Exist
+
+		refCountPtr := roc_alloc(C.ulong(len(encodedModel)+8), 1)
+		refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
+		refCountSlice[0] = 9223372036854775808
+		startPtr := unsafe.Add(refCountPtr, 8)
+
+		dataSlice := unsafe.Slice((*byte)(startPtr), len(encodedModel))
+		copy(dataSlice, encodedModel)
+
+		var rocList C.struct_RocList
+		rocList.len = C.ulong(len(encodedModel))
+		rocList.capacity = rocList.len
+		rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
+		decodeArg.payload = *(*[24]byte)(unsafe.Pointer(&rocList))
+	}
+
+	C.roc__mainForHost_0_caller(&decodeArg, nil, &model)
 
 	r := Roc{model: model}
 
@@ -51,6 +70,17 @@ func New(reader io.Reader) (*Roc, error) {
 	}
 
 	return &r, nil
+}
+
+// DumpModel returns a []byte reprsentation of the model.
+func (r *Roc) DumpModel() []byte {
+	var rocBytes C.struct_RocList
+	C.roc__mainForHost_1_caller(&r.model, nil, &rocBytes)
+
+	len := rocBytes.len
+	ptr := (*byte)(unsafe.Pointer(rocBytes.bytes))
+	bytes := unsafe.Slice(ptr, len)
+	return bytes
 }
 
 func setRefCountToTwo(ptr unsafe.Pointer) {
@@ -101,7 +131,7 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 	// TODO: check the refcount of the response and deallocate it if necessary.
 	var response C.struct_Response
 	setRefCountToTwo(r.model)
-	C.roc__mainForHost_0_caller(&rocRequest, &r.model, nil, &response)
+	C.roc__mainForHost_2_caller(&rocRequest, &r.model, nil, &response)
 
 	return Response{
 		Status:  int(response.status),
@@ -144,7 +174,7 @@ func (r *Roc) runWriteRequest(request Request) (C.struct_ResponseModel, error) {
 	// TODO: check the refcount of the response and deallocate it if necessary.
 	var responseModel C.struct_ResponseModel
 	setRefCountToTwo(r.model)
-	C.roc__mainForHost_1_caller(&rocRequest, &r.model, nil, &responseModel)
+	C.roc__mainForHost_3_caller(&rocRequest, &r.model, nil, &responseModel)
 	return responseModel, nil
 }
 

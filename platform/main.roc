@@ -6,22 +6,28 @@ platform "webserver"
     provides [mainForHost]
 
 ProgramForHost : {
-    init : Box Model,
+    decodeModel : [Init, Exist (List U8)] -> Box Model,
+    encodeModel : Box Model -> List U8,
     handleReadRequest : Request, Box Model -> Response,
     handleWriteRequest : Request, Box Model -> (Response, Box Model),
 }
 
 mainForHost : ProgramForHost
 mainForHost = {
-    init,
+    decodeModel,
+    encodeModel,
     handleReadRequest,
     handleWriteRequest,
 }
 
-init : Box Model
-init =
-    main.init
+decodeModel : [Init, Exist (List U8)] -> Box Model
+decodeModel = \fromHost ->
+    main.decodeModel fromHost
     |> Box.box
+
+encodeModel : Box Model -> List U8
+encodeModel = \boxedModel ->
+    main.encodeModel (Box.unbox boxedModel)
 
 handleReadRequest : Request, Box Model -> Response
 handleReadRequest = \request, boxedModel ->

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -18,21 +19,35 @@ func main() {
 	}
 }
 
-func run() error {
+func run() (err error) {
 	ctx, cancel := interruptContext()
 	defer cancel()
 
-	db := database.FileDB{File: "db.events"}
+	db := database.FileDB{
+		EventFile:    "db.events",
+		SnapshotFile: "db.snapshot",
+	}
 
-	reader, err := db.Reader()
+	reader, err := db.EventReader()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
 
-	r, err := roc.New(reader)
+	initSnapshot, err := db.SnapshotRead()
+	if err != nil {
+		return fmt.Errorf("reading snapshot: %w", err)
+	}
+
+	r, err := roc.New(initSnapshot, reader)
 	if err != nil {
 		return fmt.Errorf("initial roc app: %w", err)
 	}
+
+	defer func() {
+		if sErr := db.SnapshotWrite(r.DumpModel()); sErr != nil {
+			err = errors.Join(err, fmt.Errorf("saving model snapshot: %w", sErr))
+		}
+	}()
 
 	return http.Run(ctx, ":8090", r, db)
 }

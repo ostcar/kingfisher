@@ -5,6 +5,7 @@ platform/*.rh
 platform/*.rm
 platform/*tar.br
 examples/hello_world/main
-examples/hello_world/main.o
 .task
+
 db.events
+db.snapshot
