@@ -44,11 +44,11 @@ func (db FileDB) SnapshotWrite(snapshot []byte) error {
 	// TODO: Do not replace the file
 	f, err := os.Create(db.SnapshotFile)
 	if err != nil {
-		return fmt.Errorf("create snapshot file: %w", err)
+		return fmt.Errorf("creating snapshot file: %w", err)
 	}
 
 	if _, err := f.Write(snapshot); err != nil {
-		return fmt.Errorf("write snapshot: %w", err)
+		return fmt.Errorf("writing snapshot: %w", err)
 	}
 
 	if err := f.Close(); err != nil {
@@ -81,7 +81,7 @@ func (db FileDB) RequestsReader() (io.ReadCloser, error) {
 func (db FileDB) RequestsWriter() (io.WriteCloser, error) {
 	f, err := os.OpenFile(db.RequestsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("open db file: %w", err)
+		return nil, fmt.Errorf("open database file: %w", err)
 	}
 
 	return f, nil
