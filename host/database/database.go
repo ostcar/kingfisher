@@ -12,13 +12,13 @@ import (
 type Database interface {
 	SnapshotRead() ([]byte, error)
 	SnapshotWrite([]byte) error
-	EventReader() (io.ReadCloser, error)
-	EventWriter() (io.WriteCloser, error)
+	RequestsReader() (io.ReadCloser, error)
+	RequestsWriter() (io.WriteCloser, error)
 }
 
 // FileDB is a evet database based of one file.
 type FileDB struct {
-	EventFile    string
+	RequestsFile string
 	SnapshotFile string
 }
 
@@ -39,7 +39,7 @@ func (db FileDB) SnapshotRead() ([]byte, error) {
 
 // SnapshotWrite writes the snapshot to the file.
 //
-// Also removes all Events.
+// Also clears the requests file.
 func (db FileDB) SnapshotWrite(snapshot []byte) error {
 	// TODO: Do not replace the file
 	f, err := os.Create(db.SnapshotFile)
@@ -55,18 +55,18 @@ func (db FileDB) SnapshotWrite(snapshot []byte) error {
 		return fmt.Errorf("closing snaphot file: %w", err)
 	}
 
-	if err := os.Remove(db.EventFile); err != nil {
+	if err := os.Remove(db.RequestsFile); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("removing event file: %w", err)
+			return fmt.Errorf("removing requests file: %w", err)
 		}
 	}
 
 	return nil
 }
 
-// EventReader returns a reader to read the events from.
-func (db FileDB) EventReader() (io.ReadCloser, error) {
-	f, err := os.Open(db.EventFile)
+// RequestsReader returns a reader to read the loged requests from.
+func (db FileDB) RequestsReader() (io.ReadCloser, error) {
+	f, err := os.Open(db.RequestsFile)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("open database file: %w", err)
@@ -77,9 +77,9 @@ func (db FileDB) EventReader() (io.ReadCloser, error) {
 	return f, nil
 }
 
-// EventWriter returns a writer to store events
-func (db FileDB) EventWriter() (io.WriteCloser, error) {
-	f, err := os.OpenFile(db.EventFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+// RequestsWriter returns a writer to store requests.
+func (db FileDB) RequestsWriter() (io.WriteCloser, error) {
+	f, err := os.OpenFile(db.RequestsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open database file: %w", err)
 	}
@@ -87,11 +87,11 @@ func (db FileDB) EventWriter() (io.WriteCloser, error) {
 	return f, nil
 }
 
-// MemoryDB stores Events in memory.
+// MemoryDB stores the data in memory.
 //
 // Usefull for testing.
 type MemoryDB struct {
-	Events   string
+	Requests string
 	Snapshot string
 }
 
@@ -106,13 +106,13 @@ func (db *MemoryDB) SnapshotWrite(snapshot []byte) error {
 	return nil
 }
 
-// EventReader returns a reader to read the events from.
-func (db *MemoryDB) EventReader() (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader(db.Events)), nil
+// RequestsReader returns a reader to read the loged requests from.
+func (db *MemoryDB) RequestsReader() (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(db.Requests)), nil
 }
 
-// EventWriter does currently nothing.
-func (db *MemoryDB) EventWriter() (io.WriteCloser, error) {
+// RequestsWriter does currently nothing.
+func (db *MemoryDB) RequestsWriter() (io.WriteCloser, error) {
 	return NoopWriteCloser{}, nil
 }
 
