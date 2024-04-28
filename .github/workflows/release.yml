@@ -29,6 +29,11 @@ jobs:
         with:
           go-version-file: 'host/go.mod'
 
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.12.0
+
       - name: Build platform
         run: task preprocess
 
