@@ -29,6 +29,7 @@ type cliConfig struct {
 	Addr         string `help:"Address to listen on." default:":8090"`
 	SnapshotFile string `help:"Path to the snapshot file." default:"db.snapshot" type:"path"`
 	RequestsFile string `help:"Path to the requests file." default:"db.requests" type:"path"`
+	NoSnapshot   bool   `help:"Disable snapshoting."`
 }
 
 func run(cli cliConfig) (err error) {
@@ -55,11 +56,13 @@ func run(cli cliConfig) (err error) {
 		return fmt.Errorf("initial roc app: %w", err)
 	}
 
-	defer func() {
-		if sErr := db.SnapshotWrite(r.DumpModel()); sErr != nil {
-			err = errors.Join(err, fmt.Errorf("saving model snapshot: %w", sErr))
-		}
-	}()
+	if !cli.NoSnapshot {
+		defer func() {
+			if sErr := db.SnapshotWrite(r.DumpModel()); sErr != nil {
+				err = errors.Join(err, fmt.Errorf("saving model snapshot: %w", sErr))
+			}
+		}()
+	}
 
 	return http.Run(ctx, cli.Addr, r, db)
 }
