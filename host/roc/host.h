@@ -12,20 +12,6 @@ struct RocList {
     size_t capacity;
 };
 
-struct BodyMimeType {
-    struct RocStr body;
-    struct RocStr mimeType;
-};
-
-union RequestBodyUnion {
-    struct BodyMimeType body;
-};
-
-struct RequestBody {
-    union RequestBodyUnion payload;
-    unsigned char discriminant;
-};
-
 union RequestTimeoutUnion {
     long long unsigned int timeoutMilliseconds;
 };
@@ -41,8 +27,9 @@ struct Header {
 };
 
 struct Request {
-    struct RequestBody body;
+    struct RocList body;
     struct RocList headers;
+    struct RocStr mimeType;
     struct RequestTimeout timeout;
     struct RocStr url;
     unsigned char methodEnum; 

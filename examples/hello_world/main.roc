@@ -47,8 +47,8 @@ handleWriteRequest : Request, Model -> (Response, Model)
 handleWriteRequest = \request, _model ->
     model =
         when request.body is
-            EmptyBody -> "World"
-            Body b -> b.body |> Str.fromUtf8 |> Result.withDefault "invalid body"
+            [] -> "World"
+            _ -> request.body |> Str.fromUtf8 |> Result.withDefault "invalid body"
     (
         {
             body: model |> Str.toUtf8,

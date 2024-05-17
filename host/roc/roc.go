@@ -190,23 +190,14 @@ func (r *Roc) runWriteRequest(request Request) (C.struct_ResponseModel, error) {
 }
 
 func convertRequest(r Request) (C.struct_Request, error) {
-	var requestBody C.struct_RequestBody
-	requestBody.discriminant = 1
-	if len(r.Body) > 0 {
-		contentType := r.getHeader("Content-type")
-		if contentType == "" {
-			contentType = "text/plain"
-		}
-
-		requestBody.discriminant = 0
-		var bodyMimetype C.struct_BodyMimeType
-		bodyMimetype.mimeType = rocStrFromStr(contentType)
-		bodyMimetype.body = rocStrFromStr(string(r.Body))
-		requestBody.payload = *(*[48]byte)(unsafe.Pointer(&bodyMimetype))
+	contentType := r.getHeader("Content-type")
+	if contentType == "" {
+		contentType = "text/plain"
 	}
 
 	var rocRequest C.struct_Request
-	rocRequest.body = requestBody
+	rocRequest.body = rocListFromBytes(r.Body)
+	rocRequest.mimeType = rocStrFromStr(contentType)
 	rocRequest.methodEnum = convertMethod(r.Method)
 	rocRequest.headers = toRocHeader(r.Header)
 	rocRequest.url = rocStrFromStr(r.URL)
@@ -303,6 +294,24 @@ type Response struct {
 }
 
 const is64Bit = uint64(^uintptr(0)) == ^uint64(0)
+
+func rocListFromBytes(bytes []byte) C.struct_RocList {
+	// TODO: 8 only works for 64bit. Use the correct size.
+	refCountPtr := roc_alloc(C.ulong(len(bytes)+8), 8)
+	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
+	refCountSlice[0] = 9223372036854775808 // TODO: calculate this number from the lowest int
+	startPtr := unsafe.Add(refCountPtr, 8)
+
+	var rocList C.struct_RocList
+	rocList.len = C.ulong(len(bytes))
+	rocList.capacity = rocList.len
+	rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
+
+	dataSlice := unsafe.Slice((*byte)(startPtr), len(bytes))
+	copy(dataSlice, bytes)
+
+	return rocList
+}
 
 func rocListBytes(rocList C.struct_RocList) []byte {
 	len := rocList.len
