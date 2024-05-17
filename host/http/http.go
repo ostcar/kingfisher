@@ -51,6 +51,7 @@ func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 			return
 		}
 
+		var outErr error
 		if isWriteRequest(r.Method) {
 			writer, err := db.RequestsWriter()
 			if err != nil {
@@ -58,11 +59,11 @@ func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 				return
 			}
 
-			response, err = rocApp.WriteRequest(request, writer)
+			response, outErr = rocApp.WriteRequest(request, writer)
 		} else {
-			response, err = rocApp.ReadRequest(request)
+			response, outErr = rocApp.ReadRequest(request)
 		}
-		if err != nil {
+		if outErr != nil {
 			http.Error(w, "Error", 500)
 			log.Printf("Error: %v", err)
 			return
