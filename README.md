@@ -17,7 +17,7 @@ Use the platform with the following roc-application-header:
 
 ```roc
 app [main, Model] {
-    webserver: platform "https://github.com/ostcar/kingfisher/releases/download/v0.0.1/GJKdBN6nFVo5QW7t66X3vJLGmPmjd5qfmqcS5y9V7M0.tar.br",
+    webserver: platform "https://github.com/ostcar/kingfisher/releases/download/v0.0.2/zlcCcrA9VofMd0mIrHEGwktucdmnq7xPIOuVNgY8EjE.tar.br",
 }
 ```
 
