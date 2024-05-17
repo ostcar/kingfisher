@@ -68,8 +68,18 @@ struct DecodeArg {
     unsigned char discriminant;
 };
 
+union ResultModelUnion {
+    struct RocStr error;
+    void* *model;
+};
+
+struct ResultModel {
+    union ResultModelUnion payload;
+    unsigned char disciminant;
+};
+
 // decodeModel
-extern void roc__mainForHost_0_caller(const struct DecodeArg *arg, void* something, void* *model);
+extern void roc__mainForHost_0_caller(const struct DecodeArg *arg, void* something, const struct ResultModel *resultModel);
 
 // encodeModel
 extern void roc__mainForHost_1_caller(void* *model, void* something, struct RocList *bytes);

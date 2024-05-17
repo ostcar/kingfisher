@@ -27,7 +27,6 @@ type Roc struct {
 
 // New initializes the connection to roc.
 func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
-	var model unsafe.Pointer
 	var decodeArg C.struct_DecodeArg
 	decodeArg.discriminant = 1 // Init
 	if encodedModel != nil {
@@ -48,7 +47,19 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 		decodeArg.payload = *(*[24]byte)(unsafe.Pointer(&rocList))
 	}
 
-	C.roc__mainForHost_0_caller(&decodeArg, nil, &model)
+	var mayModel C.struct_ResultModel
+	C.roc__mainForHost_0_caller(&decodeArg, nil, &mayModel)
+
+	var model unsafe.Pointer
+	switch mayModel.disciminant {
+	case 1: // Ok
+		model = *(*unsafe.Pointer)(unsafe.Pointer(&mayModel.payload))
+	case 0: // Err
+		msg := rocStrRead(*(*C.struct_RocStr)(unsafe.Pointer(&mayModel.payload)))
+		return nil, fmt.Errorf("decoding model: Roc returned: %v", msg)
+	default:
+		return nil, fmt.Errorf("decoding model got invalid data")
+	}
 
 	r := Roc{model: model}
 
@@ -227,9 +238,7 @@ func toRocHeader(goHeader map[string][]string) C.struct_RocList {
 	startPtr := unsafe.Add(refCountPtr, 8)
 
 	rocStrList := make([]C.struct_Header, len(headers))
-	for i, header := range headers {
-		rocStrList[i] = header
-	}
+	copy(rocStrList, headers)
 
 	dataSlice := unsafe.Slice((*C.struct_Header)(startPtr), len(rocStrList))
 	copy(dataSlice, rocStrList)
@@ -360,7 +369,7 @@ func roc_dealloc(ptr unsafe.Pointer, alignment int) {
 
 //export roc_panic
 func roc_panic(msg *C.struct_RocStr, tagID C.uint) {
-	panic(fmt.Sprintf(rocStrRead(*msg)))
+	panic(fmt.Sprint(rocStrRead(*msg)))
 }
 
 //export roc_dbg
