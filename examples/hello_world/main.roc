@@ -1,12 +1,11 @@
-app "hello_world"
-    packages {
-        webserver: "../../platform/main.roc",
-    }
-    imports [webserver.Webserver.{ Request, Response }]
-    provides [main, Model] to webserver
+app [main, Model] {
+    webserver: platform "../../platform/main.roc",
+}
+
+import webserver.Webserver exposing [Request, Response]
 
 Program : {
-    decodeModel : [Init, Existing (List U8)] -> Model,
+    decodeModel : [Init, Existing (List U8)] -> Result Model Str,
     encodeModel : Model -> List U8,
     handleReadRequest : Request, Model -> Response,
     handleWriteRequest : Request, Model -> (Response, Model),
@@ -22,16 +21,16 @@ main = {
     handleWriteRequest,
 }
 
-decodeModel : [Init, Existing (List U8)] -> Model
+decodeModel : [Init, Existing (List U8)] -> Result Model Str
 decodeModel = \fromPlatform ->
     when fromPlatform is
         Init ->
-            "World"
+            Ok "World"
 
         Existing encoded ->
-            when encoded |> Str.fromUtf8 is
-                Ok model -> model
-                Err _ -> crash "Error: Can not decode database."
+            encoded
+            |> Str.fromUtf8
+            |> Result.mapErr \_ -> "Error: Can not decode database."
 
 encodeModel : Model -> List U8
 encodeModel = \model ->

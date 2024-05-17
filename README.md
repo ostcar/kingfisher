@@ -16,12 +16,9 @@ model structure as you like and don't care about database tables and queries.
 Use the platform with the following roc-application-header:
 
 ```roc
-app "hello_world"
-    packages {
-        webserver: "https://github.com/ostcar/kingfisher/releases/download/v0.0.1/GJKdBN6nFVo5QW7t66X3vJLGmPmjd5qfmqcS5y9V7M0.tar.br",
-    }
-    imports [webserver.Webserver.{ Request, Response }]
-    provides [main, Model] to webserver
+app [main, Model] {
+    webserver: platform "https://github.com/ostcar/kingfisher/releases/download/v0.0.1/GJKdBN6nFVo5QW7t66X3vJLGmPmjd5qfmqcS5y9V7M0.tar.br",
+}
 ```
 
 The platform requires a `Model`. The `Model` can be any valid roc type. For
