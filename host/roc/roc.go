@@ -27,26 +27,18 @@ type Roc struct {
 
 // New initializes the connection to roc.
 func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
-	var decodeArg C.struct_DecodeArg
-	decodeArg.discriminant = 1 // Init
+	decodeArg := decodeArgInit()
 	if encodedModel != nil {
-		decodeArg.discriminant = 0 // Exist
-		rocList := NewRocList(encodedModel)
-		decodeArg.payload = *(*[24]byte)(unsafe.Pointer(&rocList))
+		decodeArg = decodeArgExisting(NewRocList(encodedModel))
 	}
 
-	var mayModel C.struct_ResultModel
-	C.roc__mainForHost_0_caller(&decodeArg, nil, &mayModel)
+	var mayModel ResultModel
+	C.roc__mainForHost_0_caller(decodeArg.CPtr(), nil, mayModel.CPtr())
 
 	var model unsafe.Pointer
-	switch mayModel.disciminant {
-	case 1: // Ok
-		model = *(*unsafe.Pointer)(unsafe.Pointer(&mayModel.payload))
-	case 0: // Err
-		msg := (*(*RocStr)(unsafe.Pointer(&mayModel.payload))).String()
-		return nil, fmt.Errorf("decoding model: Roc returned: %v", msg)
-	default:
-		return nil, fmt.Errorf("decoding model got invalid data")
+	model, errStr, ok := mayModel.result()
+	if !ok {
+		return nil, fmt.Errorf("decoding model: Roc returned: %s", errStr)
 	}
 
 	r := Roc{model: model}
@@ -73,8 +65,8 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 
 // DumpModel returns a []byte reprsentation of the model.
 func (r *Roc) DumpModel() []byte {
-	var rocBytes C.struct_RocList
-	C.roc__mainForHost_1_caller(&r.model, nil, &rocBytes)
+	var rocBytes RocList[byte]
+	C.roc__mainForHost_1_caller(&r.model, nil, rocBytes.CPtr())
 	return RocList[byte](rocBytes).List()
 }
 
@@ -124,13 +116,13 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 	}
 
 	// TODO: check the refcount of the response and deallocate it if necessary.
-	var response C.struct_Response
+	var response RocResponse
 	setRefCountToTwo(r.model)
-	C.roc__mainForHost_2_caller(&rocRequest, &r.model, nil, &response)
+	C.roc__mainForHost_2_caller(rocRequest.CPtr(), &r.model, nil, response.CPtr())
 
 	return Response{
 		Status:  int(response.status),
-		Headers: toGoHeaders(RocList[C.struct_Header](response.headers)),
+		Headers: toGoHeaders(response.Headers()),
 		Body:    RocStr(response.body).String(),
 	}, nil
 }
@@ -151,7 +143,7 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 
 	response := Response{
 		Status:  int(responseModel.response.status),
-		Headers: toGoHeaders(RocList[C.struct_Header](responseModel.response.headers)),
+		Headers: toGoHeaders(responseModel.Response().Headers()),
 		Body:    RocStr(responseModel.response.body).String(),
 	}
 
@@ -160,64 +152,62 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	return response, nil
 }
 
-func (r *Roc) runWriteRequest(request Request) (C.struct_ResponseModel, error) {
+func (r *Roc) runWriteRequest(request Request) (RocResponseModel, error) {
 	rocRequest, err := convertRequest(request)
 	if err != nil {
-		return C.struct_ResponseModel{}, fmt.Errorf("convert request: %w", err)
+		return RocResponseModel{}, fmt.Errorf("convert request: %w", err)
 	}
 
 	// TODO: check the refcount of the response and deallocate it if necessary.
-	var responseModel C.struct_ResponseModel
+	var responseModel RocResponseModel
 	setRefCountToTwo(r.model)
-	C.roc__mainForHost_3_caller(&rocRequest, &r.model, nil, &responseModel)
+	C.roc__mainForHost_3_caller(rocRequest.CPtr(), &r.model, nil, responseModel.CPtr())
 	return responseModel, nil
 }
 
-func convertRequest(r Request) (C.struct_Request, error) {
+func convertRequest(r Request) (RocRequest, error) {
 	contentType := r.getHeader("Content-type")
 	if contentType == "" {
 		contentType = "text/plain"
 	}
 
-	var rocRequest C.struct_Request
+	var rocRequest RocRequest
 	rocRequest.body = NewRocList(r.Body).C()
 	rocRequest.mimeType = NewRocStr(contentType).C()
-	rocRequest.methodEnum = convertMethod(r.Method)
+	rocRequest.methodEnum = C.uchar(convertMethod(r.Method))
 	rocRequest.headers = toRocHeader(r.Header).C()
 	rocRequest.url = NewRocStr(r.URL).C()
 	// TODO: What is a request timeout?
-	rocRequest.timeout = C.struct_RequestTimeout{discriminant: 0}
+	rocRequest.timeout = requestTimeoutNoTimeout().C()
 	return rocRequest, nil
 }
 
-func toRocHeader(goHeader map[string][]string) RocList[C.struct_Header] {
+func toRocHeader(goHeader map[string][]string) RocList[RocHeader] {
+	_ = C.struct_Header{} // TODO: This seems to be a go bug. If This line is removed, go generates a wrong c type.
+
 	// This is only the correct len, if each header-name unique. This should be most of the time.
-	headers := make([]C.struct_Header, 0, len(goHeader))
+	headers := make([]RocHeader, 0, len(goHeader))
 	for name, valueList := range goHeader {
 		for _, value := range valueList {
-			h := C.struct_Header{
-				name:  NewRocStr(name).C(),
-				value: NewRocStr(value).C(),
-			}
-			headers = append(headers, h)
+			headers = append(headers, RocHeader{name: NewRocStr(name).C(), value: NewRocList([]byte(value)).C()})
 		}
 	}
 
 	return NewRocList(headers)
 }
 
-func toGoHeaders(rocHeaders RocList[C.struct_Header]) []Header {
+func toGoHeaders(rocHeaders RocList[RocHeader]) []Header {
 	headerList := rocHeaders.List()
 
 	goHeader := make([]Header, len(headerList))
 	for i, header := range headerList {
-		goHeader[i] = Header{Name: RocStr(header.name).String(), Value: RocStr(header.value).String()}
+		goHeader[i] = Header{Name: RocStr(header.name).String(), Value: string(RocList[byte](header.value).List())}
 	}
 
 	return goHeader
 }
 
-func convertMethod(method string) C.uchar {
+func convertMethod(method string) byte {
 	switch method {
 	case http.MethodConnect:
 		return 0

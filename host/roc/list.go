@@ -34,3 +34,7 @@ func (r RocList[t]) List() []t {
 func (r RocList[t]) C() C.struct_RocList {
 	return C.struct_RocList(r)
 }
+
+func (r *RocList[t]) CPtr() *C.struct_RocList {
+	return (*C.struct_RocList)(r)
+}

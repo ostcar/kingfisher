@@ -23,7 +23,7 @@ struct RequestTimeout {
 
 struct Header {
     struct RocStr name;
-    struct RocStr value;
+    struct RocList value;
 };
 
 struct Request {
