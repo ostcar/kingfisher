@@ -27,38 +27,18 @@ type Roc struct {
 
 // New initializes the connection to roc.
 func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
-	var decodeArg C.struct_DecodeArg
-	decodeArg.discriminant = 1 // Init
+	decodeArg := decodeArgInit()
 	if encodedModel != nil {
-		decodeArg.discriminant = 0 // Exist
-
-		refCountPtr := roc_alloc(C.ulong(len(encodedModel)+8), 1)
-		refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-		refCountSlice[0] = 9223372036854775808
-		startPtr := unsafe.Add(refCountPtr, 8)
-
-		dataSlice := unsafe.Slice((*byte)(startPtr), len(encodedModel))
-		copy(dataSlice, encodedModel)
-
-		var rocList C.struct_RocList
-		rocList.len = C.ulong(len(encodedModel))
-		rocList.capacity = rocList.len
-		rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
-		decodeArg.payload = *(*[24]byte)(unsafe.Pointer(&rocList))
+		decodeArg = decodeArgExisting(NewRocList(encodedModel))
 	}
 
-	var mayModel C.struct_ResultModel
-	C.roc__mainForHost_0_caller(&decodeArg, nil, &mayModel)
+	var mayModel ResultModel
+	C.roc__mainForHost_0_caller(decodeArg.CPtr(), nil, mayModel.CPtr())
 
 	var model unsafe.Pointer
-	switch mayModel.disciminant {
-	case 1: // Ok
-		model = *(*unsafe.Pointer)(unsafe.Pointer(&mayModel.payload))
-	case 0: // Err
-		msg := rocStrRead(*(*C.struct_RocStr)(unsafe.Pointer(&mayModel.payload)))
-		return nil, fmt.Errorf("decoding model: Roc returned: %v", msg)
-	default:
-		return nil, fmt.Errorf("decoding model got invalid data")
+	model, errStr, ok := mayModel.result()
+	if !ok {
+		return nil, fmt.Errorf("decoding model: Roc returned: %s", errStr)
 	}
 
 	r := Roc{model: model}
@@ -85,13 +65,9 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 
 // DumpModel returns a []byte reprsentation of the model.
 func (r *Roc) DumpModel() []byte {
-	var rocBytes C.struct_RocList
-	C.roc__mainForHost_1_caller(&r.model, nil, &rocBytes)
-
-	len := rocBytes.len
-	ptr := (*byte)(unsafe.Pointer(rocBytes.bytes))
-	bytes := unsafe.Slice(ptr, len)
-	return bytes
+	var rocBytes RocList[byte]
+	C.roc__mainForHost_1_caller(&r.model, nil, rocBytes.CPtr())
+	return RocList[byte](rocBytes).List()
 }
 
 func setRefCountToTwo(ptr unsafe.Pointer) {
@@ -140,14 +116,14 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 	}
 
 	// TODO: check the refcount of the response and deallocate it if necessary.
-	var response C.struct_Response
+	var response RocResponse
 	setRefCountToTwo(r.model)
-	C.roc__mainForHost_2_caller(&rocRequest, &r.model, nil, &response)
+	C.roc__mainForHost_2_caller(rocRequest.CPtr(), &r.model, nil, response.CPtr())
 
 	return Response{
 		Status:  int(response.status),
-		Headers: toGoHeaders(response.headers),
-		Body:    rocStrRead(response.body),
+		Headers: toGoHeaders(response.Headers()),
+		Body:    RocStr(response.body).String(),
 	}, nil
 }
 
@@ -167,8 +143,8 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 
 	response := Response{
 		Status:  int(responseModel.response.status),
-		Headers: toGoHeaders(responseModel.response.headers),
-		Body:    rocStrRead(responseModel.response.body),
+		Headers: toGoHeaders(responseModel.Response().Headers()),
+		Body:    RocStr(responseModel.response.body).String(),
 	}
 
 	r.model = unsafe.Pointer(responseModel.model)
@@ -176,86 +152,62 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	return response, nil
 }
 
-func (r *Roc) runWriteRequest(request Request) (C.struct_ResponseModel, error) {
+func (r *Roc) runWriteRequest(request Request) (RocResponseModel, error) {
 	rocRequest, err := convertRequest(request)
 	if err != nil {
-		return C.struct_ResponseModel{}, fmt.Errorf("convert request: %w", err)
+		return RocResponseModel{}, fmt.Errorf("convert request: %w", err)
 	}
 
 	// TODO: check the refcount of the response and deallocate it if necessary.
-	var responseModel C.struct_ResponseModel
+	var responseModel RocResponseModel
 	setRefCountToTwo(r.model)
-	C.roc__mainForHost_3_caller(&rocRequest, &r.model, nil, &responseModel)
+	C.roc__mainForHost_3_caller(rocRequest.CPtr(), &r.model, nil, responseModel.CPtr())
 	return responseModel, nil
 }
 
-func convertRequest(r Request) (C.struct_Request, error) {
+func convertRequest(r Request) (RocRequest, error) {
 	contentType := r.getHeader("Content-type")
 	if contentType == "" {
 		contentType = "text/plain"
 	}
 
-	var rocRequest C.struct_Request
-	rocRequest.body = rocListFromBytes(r.Body)
-	rocRequest.mimeType = rocStrFromStr(contentType)
-	rocRequest.methodEnum = convertMethod(r.Method)
-	rocRequest.headers = toRocHeader(r.Header)
-	rocRequest.url = rocStrFromStr(r.URL)
+	var rocRequest RocRequest
+	rocRequest.body = NewRocList(r.Body).C()
+	rocRequest.mimeType = NewRocStr(contentType).C()
+	rocRequest.methodEnum = C.uchar(convertMethod(r.Method))
+	rocRequest.headers = toRocHeader(r.Header).C()
+	rocRequest.url = NewRocStr(r.URL).C()
 	// TODO: What is a request timeout?
-	rocRequest.timeout = C.struct_RequestTimeout{discriminant: 0}
+	rocRequest.timeout = requestTimeoutNoTimeout().C()
 	return rocRequest, nil
 }
 
-func toRocHeader(goHeader map[string][]string) C.struct_RocList {
+func toRocHeader(goHeader map[string][]string) RocList[RocHeader] {
+	_ = C.struct_Header{} // TODO: This seems to be a go bug. If This line is removed, go generates a wrong c type.
+
 	// This is only the correct len, if each header-name unique. This should be most of the time.
-	headers := make([]C.struct_Header, 0, len(goHeader))
+	headers := make([]RocHeader, 0, len(goHeader))
 	for name, valueList := range goHeader {
 		for _, value := range valueList {
-			h := C.struct_Header{
-				name:  rocStrFromStr(name),
-				value: rocStrFromStr(value),
-			}
-			headers = append(headers, h)
+			headers = append(headers, RocHeader{name: NewRocStr(name).C(), value: NewRocList([]byte(value)).C()})
 		}
 	}
 
-	var header C.struct_Header
-	elementSize := int(unsafe.Sizeof(header))
-	fullSize := elementSize*len(headers) + 8
-
-	refCountPtr := roc_alloc(C.ulong(fullSize), 8)
-	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-	refCountSlice[0] = 9223372036854775808
-	startPtr := unsafe.Add(refCountPtr, 8)
-
-	rocStrList := make([]C.struct_Header, len(headers))
-	copy(rocStrList, headers)
-
-	dataSlice := unsafe.Slice((*C.struct_Header)(startPtr), len(rocStrList))
-	copy(dataSlice, rocStrList)
-
-	var rocList C.struct_RocList
-	rocList.len = C.ulong(len(headers))
-	rocList.capacity = rocList.len
-	rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
-
-	return rocList
+	return NewRocList(headers)
 }
 
-func toGoHeaders(rocHeaders C.struct_RocList) []Header {
-	len := rocHeaders.len
-	ptr := (*C.struct_Header)(unsafe.Pointer(rocHeaders.bytes))
-	headerList := unsafe.Slice(ptr, len)
+func toGoHeaders(rocHeaders RocList[RocHeader]) []Header {
+	headerList := rocHeaders.List()
 
-	goHeader := make([]Header, len)
+	goHeader := make([]Header, len(headerList))
 	for i, header := range headerList {
-		goHeader[i] = Header{Name: rocStrRead(header.name), Value: rocStrRead(header.value)}
+		goHeader[i] = Header{Name: RocStr(header.name).String(), Value: string(RocList[byte](header.value).List())}
 	}
 
 	return goHeader
 }
 
-func convertMethod(method string) C.uchar {
+func convertMethod(method string) byte {
 	switch method {
 	case http.MethodConnect:
 		return 0
@@ -295,69 +247,6 @@ type Response struct {
 
 const is64Bit = uint64(^uintptr(0)) == ^uint64(0)
 
-func rocListFromBytes(bytes []byte) C.struct_RocList {
-	// TODO: 8 only works for 64bit. Use the correct size.
-	refCountPtr := roc_alloc(C.ulong(len(bytes)+8), 8)
-	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-	refCountSlice[0] = 9223372036854775808 // TODO: calculate this number from the lowest int
-	startPtr := unsafe.Add(refCountPtr, 8)
-
-	var rocList C.struct_RocList
-	rocList.len = C.ulong(len(bytes))
-	rocList.capacity = rocList.len
-	rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
-
-	dataSlice := unsafe.Slice((*byte)(startPtr), len(bytes))
-	copy(dataSlice, bytes)
-
-	return rocList
-}
-
-func rocListBytes(rocList C.struct_RocList) []byte {
-	len := rocList.len
-	ptr := (*byte)(unsafe.Pointer(rocList.bytes))
-	return unsafe.Slice(ptr, len)
-}
-
-func rocStrFromStr(str string) C.struct_RocStr {
-	// TODO: 8 only works for 64bit. Use the correct size.
-	refCountPtr := roc_alloc(C.ulong(len(str)+8), 8)
-	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-	refCountSlice[0] = 9223372036854775808 // TODO: calculate this number from the lowest int
-	startPtr := unsafe.Add(refCountPtr, 8)
-
-	var rocStr C.struct_RocStr
-	rocStr.len = C.ulong(len(str))
-	rocStr.capacity = rocStr.len
-	rocStr.bytes = (*C.char)(unsafe.Pointer(startPtr))
-
-	dataSlice := unsafe.Slice((*byte)(startPtr), len(str))
-	copy(dataSlice, []byte(str))
-
-	return rocStr
-}
-
-func rocStrRead(rocStr C.struct_RocStr) string {
-	if int(rocStr.capacity) < 0 {
-		// Small string
-		ptr := (*byte)(unsafe.Pointer(&rocStr))
-
-		byteLen := 12
-		if is64Bit {
-			byteLen = 24
-		}
-
-		shortStr := unsafe.String(ptr, byteLen)
-		len := shortStr[byteLen-1] ^ 128
-		return shortStr[:len]
-	}
-
-	// Remove the bit for seamless string
-	len := (uint(rocStr.len) << 1) >> 1
-	ptr := (*byte)(unsafe.Pointer(rocStr.bytes))
-	return unsafe.String(ptr, len)
-}
-
 //export roc_alloc
 func roc_alloc(size C.ulong, alignment int) unsafe.Pointer {
 	_ = alignment
@@ -377,19 +266,15 @@ func roc_dealloc(ptr unsafe.Pointer, alignment int) {
 }
 
 //export roc_panic
-func roc_panic(msg *C.struct_RocStr, tagID C.uint) {
-	panic(fmt.Sprint(rocStrRead(*msg)))
+func roc_panic(msg *RocStr, tagID C.uint) {
+	panic(msg.String())
 }
 
 //export roc_dbg
-func roc_dbg(loc *C.struct_RocStr, msg *C.struct_RocStr, src *C.struct_RocStr) {
-	locStr := rocStrRead(*loc)
-	msgStr := rocStrRead(*msg)
-	srcStr := rocStrRead(*src)
-
-	if srcStr == msgStr {
-		fmt.Fprintf(os.Stderr, "[%s] {%s}\n", locStr, msgStr)
+func roc_dbg(loc *RocStr, msg *RocStr, src *RocStr) {
+	if src.String() == msg.String() {
+		fmt.Fprintf(os.Stderr, "[%s] {%s}\n", loc, msg)
 	} else {
-		fmt.Fprintf(os.Stderr, "[%s] {%s} = {%s}\n", locStr, srcStr, msgStr)
+		fmt.Fprintf(os.Stderr, "[%s] {%s} = {%s}\n", loc, src, msg)
 	}
 }
