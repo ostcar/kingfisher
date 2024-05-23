@@ -79,7 +79,7 @@ func (db FileDB) RequestsReader() (io.ReadCloser, error) {
 
 // RequestsWriter returns a writer to store requests.
 func (db FileDB) RequestsWriter() (io.WriteCloser, error) {
-	f, err := os.OpenFile(db.RequestsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(db.RequestsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open database file: %w", err)
 	}
