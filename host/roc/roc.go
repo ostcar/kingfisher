@@ -60,7 +60,7 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 		r.model = unsafe.Pointer(responseModel.model)
 	}
 
-	setRefCountToHighValue(r.model)
+	setRefCountToInfinity(r.model)
 
 	return &r, nil
 }
@@ -72,15 +72,11 @@ func (r *Roc) DumpModel() []byte {
 	return RocList[byte](rocBytes).List()
 }
 
-func setRefCountToHighValue(ptr unsafe.Pointer) {
-	// This sets the refcounter to a high value. Each time a read request is
-	// handled, the ref counter is reduced by one. On each write request, the
-	// counter is set to a high value again. The hope is, that there is a write
-	// request, before the refcount reaches 0. See
-	// https://roc.zulipchat.com/#narrow/stream/302903-Writing-a-platform/topic/Ref.20count.20and.20parallel.20calls
+func setRefCountToInfinity(ptr unsafe.Pointer) {
+	// Setting the refcount to 0 tells roc, not to modify it.
 	refcountPtr := unsafe.Add(ptr, -8)
 	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = ^uint(0) - 1
+	refCountSlice[0] = 0
 }
 
 func setRefCountToOne(ptr unsafe.Pointer) {
@@ -160,7 +156,7 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	}
 
 	r.model = unsafe.Pointer(responseModel.model)
-	setRefCountToHighValue(r.model)
+	setRefCountToInfinity(r.model)
 
 	return response, nil
 }
