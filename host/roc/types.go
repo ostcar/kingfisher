@@ -57,7 +57,8 @@ func (r RocResponse) Headers() RocList[RocHeader] {
 }
 
 func (r RocResponse) Free() {
-	RocStr(r.body).Free()
+	RocStr(r.body).DecRef()
+	// TODO: Do RocHeaders also need to use DecRef?
 	RocList[RocHeader](r.headers).Free()
 }
 
@@ -68,7 +69,7 @@ func (r RocHeader) C() C.struct_Header {
 }
 
 func (r RocHeader) Free() {
-	RocStr(r.name).Free()
+	RocStr(r.name).DecRef()
 	RocList[byte](r.value).Free()
 }
 

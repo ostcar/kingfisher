@@ -64,6 +64,7 @@ func (r RocStr) DecRef() {
 
 	if refCountSlice[0] == refcount_one {
 		r.Free()
+		return
 	}
 
 	refCountSlice[0] -= 1
