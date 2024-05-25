@@ -56,10 +56,20 @@ func (r RocResponse) Headers() RocList[RocHeader] {
 	return *(*RocList[RocHeader])(unsafe.Pointer(&ctypeList))
 }
 
+func (r RocResponse) Free() {
+	RocStr(r.body).Free()
+	RocList[RocHeader](r.headers).Free()
+}
+
 type RocHeader C.struct_Header
 
 func (r RocHeader) C() C.struct_Header {
 	return C.struct_Header(r)
+}
+
+func (r RocHeader) Free() {
+	RocStr(r.name).Free()
+	RocList[byte](r.value).Free()
 }
 
 type RocResponseModel C.struct_ResponseModel

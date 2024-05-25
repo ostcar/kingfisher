@@ -23,8 +23,12 @@ func NewRocStr(str string) RocStr {
 	return rocStr
 }
 
+func (r RocStr) Small() bool {
+	return int(r.capacity) < 0
+}
+
 func (r RocStr) String() string {
-	if int(r.capacity) < 0 {
+	if r.Small() {
 		// Small string
 		ptr := (*byte)(unsafe.Pointer(&r))
 
@@ -46,4 +50,14 @@ func (r RocStr) String() string {
 
 func (r RocStr) C() C.struct_RocStr {
 	return C.struct_RocStr(r)
+}
+
+func (r RocStr) Free() {
+	if r.Small() {
+		return
+	}
+
+	// TODO Fix for non 64 systems
+	refCountPtr := unsafe.Add(unsafe.Pointer(r.bytes), -8)
+	roc_dealloc(refCountPtr, 0)
 }

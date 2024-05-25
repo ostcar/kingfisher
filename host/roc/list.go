@@ -1,7 +1,9 @@
 package roc
 
 import "C"
-import "unsafe"
+import (
+	"unsafe"
+)
 
 type RocList[t any] C.struct_RocList
 
@@ -37,4 +39,27 @@ func (r RocList[t]) C() C.struct_RocList {
 
 func (r *RocList[t]) CPtr() *C.struct_RocList {
 	return (*C.struct_RocList)(r)
+}
+
+type Freer interface {
+	Free()
+}
+
+func (r RocList[t]) Free() {
+	ptr := unsafe.Pointer(r.bytes)
+	if ptr == nil {
+		return
+	}
+
+	for _, e := range r.List() {
+		hasFree, ok := any(e).(Freer)
+		if !ok {
+			break
+		}
+		hasFree.Free()
+	}
+
+	// TODO Fix for non 64 systems
+	refCountPtr := unsafe.Add(ptr, -8)
+	roc_dealloc(refCountPtr, 0)
 }
