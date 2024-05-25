@@ -55,7 +55,8 @@ func (r RocStr) C() C.struct_RocStr {
 }
 
 func (r RocStr) DecRef() {
-	if r.Small() {
+	ptr := unsafe.Pointer(r.bytes)
+	if r.Small() || ptr == nil {
 		return
 	}
 
@@ -75,7 +76,10 @@ func (r RocStr) Free() {
 		return
 	}
 
-	// TODO Fix for non 64 systems
-	refCountPtr := unsafe.Add(unsafe.Pointer(r.bytes), -8)
-	roc_dealloc(refCountPtr, 0)
+	refcountPtr := unsafe.Add(unsafe.Pointer(r.bytes), -8)
+	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
+	if refCountSlice[0] == 0 {
+		return
+	}
+	roc_dealloc(refcountPtr, 0)
 }

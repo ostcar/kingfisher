@@ -61,6 +61,12 @@ func (r RocList[t]) Free() {
 		hasFree.Free()
 	}
 
+	refcountPtr := unsafe.Add(unsafe.Pointer(ptr), -8)
+	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
+	if refCountSlice[0] == 0 {
+		return
+	}
+
 	// TODO Fix for non 64 systems
 	refCountPtr := unsafe.Add(ptr, -8)
 	roc_dealloc(refCountPtr, 0)
