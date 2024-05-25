@@ -19,6 +19,8 @@ import (
 	"unsafe"
 )
 
+const refcount_one = 1 << 63
+
 // Roc holds the connection to roc.
 type Roc struct {
 	mu sync.RWMutex
@@ -83,7 +85,7 @@ func setRefCountToInfinity(ptr unsafe.Pointer) {
 func setRefCountToOne(ptr unsafe.Pointer) {
 	refcountPtr := unsafe.Add(ptr, -8)
 	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = 1<<63 + 1
+	refCountSlice[0] = refcount_one
 }
 
 // Request represents an http request

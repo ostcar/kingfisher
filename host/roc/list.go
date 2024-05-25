@@ -11,19 +11,21 @@ func NewRocList[t any](list []t) RocList[t] {
 	var zero t
 	typeSize := int(unsafe.Sizeof(zero))
 
-	// TODO: 8 only works for 64bit. Use the correct size.
-	refCountPtr := roc_alloc(C.ulong(len(list)*typeSize+8), 8)
-	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-	refCountSlice[0] = 9223372036854775808 // TODO: calculate this number from the lowest int
-	startPtr := unsafe.Add(refCountPtr, 8)
-
 	var rocList RocList[t]
-	rocList.len = C.ulong(len(list))
-	rocList.capacity = rocList.len
-	rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
+	if len(list) > 0 {
+		// TODO: 8 only works for 64bit. Use the correct size.
+		refCountPtr := roc_alloc(C.ulong(len(list)*typeSize+8), 8)
+		refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
+		refCountSlice[0] = refcount_one
+		startPtr := unsafe.Add(refCountPtr, 8)
 
-	dataSlice := unsafe.Slice((*t)(startPtr), len(list))
-	copy(dataSlice, list)
+		rocList.len = C.ulong(len(list))
+		rocList.capacity = rocList.len
+		rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
+
+		dataSlice := unsafe.Slice((*t)(startPtr), len(list))
+		copy(dataSlice, list)
+	}
 
 	return rocList
 }
