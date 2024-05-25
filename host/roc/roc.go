@@ -60,6 +60,7 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rerun request: %w", err)
 		}
+		RocResponse(responseModel.response).Free()
 		r.model = unsafe.Pointer(responseModel.model)
 	}
 
