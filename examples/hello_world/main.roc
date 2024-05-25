@@ -45,15 +45,19 @@ handleReadRequest = \_request, model -> {
 
 handleWriteRequest : Request, Model -> (Response, Model)
 handleWriteRequest = \request, _model ->
-    model =
-        when request.body is
-            [] -> "World"
-            _ -> request.body |> Str.fromUtf8 |> Result.withDefault "invalid body"
+    newModel =
+        if List.isEmpty request.body then
+            "World"
+        else
+            request.body 
+            |> Str.fromUtf8 
+            |> Result.withDefault "invalid body"
+
     (
         {
-            body: model |> Str.toUtf8,
+            body: newModel |> Str.toUtf8,
             headers: [],
             status: 200,
         },
-        model,
+        newModel,
     )

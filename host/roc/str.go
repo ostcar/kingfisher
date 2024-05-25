@@ -1,7 +1,9 @@
 package roc
 
 import "C"
-import "unsafe"
+import (
+	"unsafe"
+)
 
 type RocStr C.struct_RocStr
 
@@ -9,7 +11,7 @@ func NewRocStr(str string) RocStr {
 	// TODO: 8 only works for 64bit. Use the correct size.
 	refCountPtr := roc_alloc(C.ulong(len(str)+8), 8)
 	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-	refCountSlice[0] = 9223372036854775808 // TODO: calculate this number from the lowest int
+	refCountSlice[0] = refcount_one
 	startPtr := unsafe.Add(refCountPtr, 8)
 
 	var rocStr RocStr
@@ -23,8 +25,12 @@ func NewRocStr(str string) RocStr {
 	return rocStr
 }
 
+func (r RocStr) Small() bool {
+	return int(r.capacity) < 0
+}
+
 func (r RocStr) String() string {
-	if int(r.capacity) < 0 {
+	if r.Small() {
 		// Small string
 		ptr := (*byte)(unsafe.Pointer(&r))
 
@@ -46,4 +52,34 @@ func (r RocStr) String() string {
 
 func (r RocStr) C() C.struct_RocStr {
 	return C.struct_RocStr(r)
+}
+
+func (r RocStr) DecRef() {
+	ptr := unsafe.Pointer(r.bytes)
+	if r.Small() || ptr == nil {
+		return
+	}
+
+	refcountPtr := unsafe.Add(unsafe.Pointer(r.bytes), -8)
+	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
+
+	if refCountSlice[0] == refcount_one {
+		r.Free()
+		return
+	}
+
+	refCountSlice[0] -= 1
+}
+
+func (r RocStr) Free() {
+	if r.Small() {
+		return
+	}
+
+	refcountPtr := unsafe.Add(unsafe.Pointer(r.bytes), -8)
+	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
+	if refCountSlice[0] == 0 {
+		return
+	}
+	roc_dealloc(refcountPtr, 0)
 }

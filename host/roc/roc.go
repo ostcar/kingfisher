@@ -14,9 +14,12 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
+	"strings"
 	"sync"
 	"unsafe"
 )
+
+const refcount_one = 1 << 63
 
 // Roc holds the connection to roc.
 type Roc struct {
@@ -57,6 +60,7 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rerun request: %w", err)
 		}
+		RocResponse(responseModel.response).Free()
 		r.model = unsafe.Pointer(responseModel.model)
 	}
 
@@ -82,7 +86,7 @@ func setRefCountToInfinity(ptr unsafe.Pointer) {
 func setRefCountToOne(ptr unsafe.Pointer) {
 	refcountPtr := unsafe.Add(ptr, -8)
 	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = 9223372036854775808
+	refCountSlice[0] = refcount_one
 }
 
 // Request represents an http request
@@ -127,11 +131,12 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 	// TODO: check the refcount of the response and deallocate it if necessary.
 	var response RocResponse
 	C.roc__mainForHost_2_caller(rocRequest.CPtr(), &r.model, nil, response.CPtr())
+	defer response.Free()
 
 	return Response{
 		Status:  int(response.status),
 		Headers: toGoHeaders(response.Headers()),
-		Body:    RocStr(response.body).String(),
+		Body:    strings.Clone(RocStr(response.body).String()),
 	}, nil
 }
 
@@ -152,8 +157,9 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	response := Response{
 		Status:  int(responseModel.response.status),
 		Headers: toGoHeaders(responseModel.Response().Headers()),
-		Body:    RocStr(responseModel.response.body).String(),
+		Body:    strings.Clone(RocStr(responseModel.response.body).String()),
 	}
+	defer RocResponse(responseModel.response).Free()
 
 	r.model = unsafe.Pointer(responseModel.model)
 	setRefCountToInfinity(r.model)
@@ -209,7 +215,10 @@ func toGoHeaders(rocHeaders RocList[RocHeader]) []Header {
 
 	goHeader := make([]Header, len(headerList))
 	for i, header := range headerList {
-		goHeader[i] = Header{Name: RocStr(header.name).String(), Value: string(RocList[byte](header.value).List())}
+		goHeader[i] = Header{
+			Name:  strings.Clone(RocStr(header.name).String()),
+			Value: strings.Clone(string(RocList[byte](header.value).List())),
+		}
 	}
 
 	return goHeader
