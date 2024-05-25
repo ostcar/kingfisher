@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 
 	"webserver/database"
 	"webserver/roc"
@@ -32,7 +33,11 @@ func Run(ctx context.Context, addr string, r *roc.Roc, db database.Database) err
 		wait <- nil
 	}()
 
-	log.Printf("Webserver is listening on: %s", addr)
+	addrToLog := addr
+	if strings.HasPrefix(addrToLog, ":") {
+		addrToLog = "0.0.0.0" + addrToLog
+	}
+	log.Printf("Webserver is listening on: http://%s", addrToLog)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return fmt.Errorf("HTTP server failed: %v", err)
 	}
