@@ -1,9 +1,5 @@
 package roc
 
-/*
-#cgo LDFLAGS: -L.. -lapp
-#include "./host.h"
-*/
 import "C"
 
 import (
@@ -13,13 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/textproto"
-	"os"
 	"strings"
 	"sync"
 	"unsafe"
 )
-
-const refcount_one = 1 << 63
 
 // Roc holds the connection to roc.
 type Roc struct {
@@ -34,9 +27,7 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 	if encodedModel != nil {
 		decodeArg = decodeArgExisting(NewRocList(encodedModel))
 	}
-
-	var mayModel ResultModel
-	C.roc__mainForHost_0_caller(decodeArg.CPtr(), nil, mayModel.CPtr())
+	mayModel := rocCallDecodeModel(decodeArg)
 
 	var model unsafe.Pointer
 	model, errStr, ok := mayModel.result()
@@ -71,22 +62,7 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 
 // DumpModel returns a []byte reprsentation of the model.
 func (r *Roc) DumpModel() []byte {
-	var rocBytes RocList[byte]
-	C.roc__mainForHost_1_caller(&r.model, nil, rocBytes.CPtr())
-	return RocList[byte](rocBytes).List()
-}
-
-func setRefCountToInfinity(ptr unsafe.Pointer) {
-	// Setting the refcount to 0 tells roc, not to modify it.
-	refcountPtr := unsafe.Add(ptr, -8)
-	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = 0
-}
-
-func setRefCountToOne(ptr unsafe.Pointer) {
-	refcountPtr := unsafe.Add(ptr, -8)
-	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = refcount_one
+	return rocCallEncodeModel(&r.model).List()
 }
 
 // Request represents an http request
@@ -96,6 +72,19 @@ type Request struct {
 	Header  map[string][]string `json:"headers"`
 	URL     string              `json:"url"`
 	Timeout uint64              `json:"timeout"`
+}
+
+// Header represents one http header.
+type Header struct {
+	Name  string
+	Value string
+}
+
+// Response represents a http response.
+type Response struct {
+	Status  int
+	Headers []Header
+	Body    string
 }
 
 // RequestFromHTTP creates a Request object from an http.Request.
@@ -128,9 +117,8 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 		return Response{}, fmt.Errorf("convert request: %w", err)
 	}
 
-	// TODO: check the refcount of the response and deallocate it if necessary.
-	var response RocResponse
-	C.roc__mainForHost_2_caller(rocRequest.CPtr(), &r.model, nil, response.CPtr())
+	response := rocCallHandleReadRequest(rocRequest, &r.model)
+	// TODO: This should probably check the refcount
 	defer response.Free()
 
 	return Response{
@@ -159,6 +147,7 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 		Headers: toGoHeaders(responseModel.Response().Headers()),
 		Body:    strings.Clone(RocStr(responseModel.response.body).String()),
 	}
+	// TODO: This should probably check the refcount
 	defer RocResponse(responseModel.response).Free()
 
 	r.model = unsafe.Pointer(responseModel.model)
@@ -173,10 +162,8 @@ func (r *Roc) runWriteRequest(request Request) (RocResponseModel, error) {
 		return RocResponseModel{}, fmt.Errorf("convert request: %w", err)
 	}
 
-	var responseModel RocResponseModel
 	setRefCountToOne(r.model)
-	C.roc__mainForHost_3_caller(rocRequest.CPtr(), &r.model, nil, responseModel.CPtr())
-	return responseModel, nil
+	return rocCallWriteReadRequest(rocRequest, &r.model), nil
 }
 
 func convertRequest(r Request) (RocRequest, error) {
@@ -197,8 +184,6 @@ func convertRequest(r Request) (RocRequest, error) {
 }
 
 func toRocHeader(goHeader map[string][]string) RocList[RocHeader] {
-	_ = C.struct_Header{} // TODO: This seems to be a go bug. If This line is removed, go generates a wrong c type.
-
 	// This is only the correct len, if each header-name unique. This should be most of the time.
 	headers := make([]RocHeader, 0, len(goHeader))
 	for name, valueList := range goHeader {
@@ -246,52 +231,5 @@ func convertMethod(method string) byte {
 		return 8
 	default:
 		panic("invalid method")
-	}
-}
-
-// Header represents one http header.
-type Header struct {
-	Name  string
-	Value string
-}
-
-// Response represents a http response.
-type Response struct {
-	Status  int
-	Headers []Header
-	Body    string
-}
-
-const is64Bit = uint64(^uintptr(0)) == ^uint64(0)
-
-//export roc_alloc
-func roc_alloc(size C.ulong, alignment int) unsafe.Pointer {
-	_ = alignment
-	return C.malloc(size)
-}
-
-//export roc_realloc
-func roc_realloc(ptr unsafe.Pointer, newSize, _ C.ulong, alignment int) unsafe.Pointer {
-	_ = alignment
-	return C.realloc(ptr, newSize)
-}
-
-//export roc_dealloc
-func roc_dealloc(ptr unsafe.Pointer, alignment int) {
-	_ = alignment
-	C.free(ptr)
-}
-
-//export roc_panic
-func roc_panic(msg *RocStr, tagID C.uint) {
-	panic(msg.String())
-}
-
-//export roc_dbg
-func roc_dbg(loc *RocStr, msg *RocStr, src *RocStr) {
-	if src.String() == msg.String() {
-		fmt.Fprintf(os.Stderr, "[%s] {%s}\n", loc, msg)
-	} else {
-		fmt.Fprintf(os.Stderr, "[%s] {%s} = {%s}\n", loc, src, msg)
 	}
 }
