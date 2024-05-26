@@ -6,6 +6,7 @@ import cli.Cmd
 import cli.Task exposing [Task]
 import cli.File
 import cli.Path
+import cli.Stdout
 
 main =
     buildForSurgicalLinker!
@@ -34,29 +35,24 @@ preprocess =
 buildForLegacyLinker : Task {} _
 buildForLegacyLinker =
     # [ MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
-    # |> List.map \target -> buildDotA target
-    # |> Task.seq
-    # |> Task.map \_ -> {}
-
-    # buildDotA! MacosArm64
-    # buildDotA! MacosX64
-    # buildDotA! LinuxArm64
-    buildDotA! LinuxX64
-# buildDotA! WindowsArm64
-# buildDotA! WindowsX64
+    [MacosArm64, MacosX64, LinuxArm64, LinuxX64]
+        |> List.map \target -> buildDotA target
+        |> Task.seq
+        |> Task.map! \_ -> {}
 
 buildDotA = \target ->
-    (goos, goarch, prebuiltBinary) =
+    (goos, goarch, zigTarget, prebuiltBinary) =
         when target is
-            MacosArm64 -> ("darwin", "arm64", "macos-arm64.a")
-            MacosX64 -> ("darwin", "amd64", "macos-x64")
-            LinuxArm64 -> ("linux", "arm64", "linux-arm64.a")
-            LinuxX64 -> ("linux", "amd64", "linux-x64.a")
-            WindowsArm64 -> ("windows", "arm64", "windows-arm64.a")
-            WindowsX64 -> ("windows", "amd64", "windows-x64")
+            MacosArm64 -> ("darwin", "arm64", "aarch64-macos", "macos-arm64.a")
+            MacosX64 -> ("darwin", "amd64", "x86_64-macos", "macos-x64.a")
+            LinuxArm64 -> ("linux", "arm64", "aarch64-linux", "linux-arm64.a")
+            LinuxX64 -> ("linux", "amd64", " x86_64-linux", "linux-x64.a")
+            WindowsArm64 -> ("windows", "arm64", "aarch64-windows", "windows-arm64.a")
+            WindowsX64 -> ("windows", "amd64", "x86_64-windows", "windows-x64")
+    Stdout.line! "build host for $(Inspect.toStr target)"
     Cmd.new "go"
-        |> Cmd.envs [("GOOS", goos), ("GOARCH", goarch), ("CC", "zig cc")]
-        |> Cmd.args ("build -C host -buildmode c-archive -o ../platform/$(prebuiltBinary) -tags legacy" |> Str.split " ")
+        |> Cmd.envs [("GOOS", goos), ("GOARCH", goarch), ("CC", "zcc $(zigTarget)"), ("CGO_ENABLED", "1")]
+        |> Cmd.args ("build -C host -buildmode c-archive -o ../platform/$(prebuiltBinary) -tags legacy,netgo" |> Str.split " ")
         |> Cmd.status
-        |> Task.mapErr! \err -> BuildErr goos goarch (Inspect.toStr err)
+        |> Task.mapErr! \err -> BuildErr target (Inspect.toStr err)
 
