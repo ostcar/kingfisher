@@ -34,20 +34,19 @@ func freeForRoc(ptr unsafe.Pointer) {
 
 // decRefCount reduces the refcounter by one.
 //
-// If the refcounter gets 0, the moemry is freed.
-//
-// Returns true, if the memory was freed.
-func decRefCount(ptr unsafe.Pointer) bool {
+// If the refcounter gets 0, the memory is freed.
+func decRefCount(ptr unsafe.Pointer) {
 	refcountPtr := unsafe.Add(ptr, -intBytes)
 	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
 
-	if refCountSlice[0] == refcount_one {
+	switch refCountSlice[0] {
+	case refcount_one:
 		freeForRoc(ptr)
-		return true
+	case 0:
+		// Data is static. Nothing to do
+	default:
+		refCountSlice[0] -= 1
 	}
-
-	refCountSlice[0] -= 1
-	return false
 }
 
 func setRefCountToInfinity(ptr unsafe.Pointer) {

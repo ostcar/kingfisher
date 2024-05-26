@@ -41,23 +41,23 @@ func (r *RocList[t]) CPtr() *C.struct_RocList {
 	return (*C.struct_RocList)(r)
 }
 
-type Freer interface {
-	Free()
-}
-
-func (r RocList[t]) Free() {
+func (r RocList[t]) DecRef() {
 	ptr := unsafe.Pointer(r.bytes)
 	if ptr == nil {
 		return
 	}
 
+	type decRefer interface {
+		DecRef()
+	}
+
 	for _, e := range r.List() {
-		hasFree, ok := any(e).(Freer)
+		hasDecRef, ok := any(e).(decRefer)
 		if !ok {
 			break
 		}
-		hasFree.Free()
+		hasDecRef.DecRef()
 	}
 
-	freeForRoc(ptr)
+	decRefCount(ptr)
 }

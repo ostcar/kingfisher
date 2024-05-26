@@ -84,10 +84,9 @@ func (r RocResponse) Headers() RocList[RocHeader] {
 	return *(*RocList[RocHeader])(unsafe.Pointer(&ctypeList))
 }
 
-func (r RocResponse) Free() {
+func (r RocResponse) DecRef() {
 	RocStr(r.body).DecRef()
-	// TODO: Do RocHeaders also need to use DecRef?
-	RocList[RocHeader](r.headers).Free()
+	RocList[RocHeader](r.headers).DecRef()
 }
 
 type RocHeader C.struct_Header
@@ -96,9 +95,9 @@ func (r RocHeader) C() C.struct_Header {
 	return C.struct_Header(r)
 }
 
-func (r RocHeader) Free() {
+func (r RocHeader) DecRef() {
 	RocStr(r.name).DecRef()
-	RocList[byte](r.value).Free()
+	RocList[byte](r.value).DecRef()
 }
 
 type RocResponseModel C.struct_ResponseModel

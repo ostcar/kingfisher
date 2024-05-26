@@ -54,12 +54,6 @@ func (r RocStr) DecRef() {
 	if r.Small() || ptr == nil {
 		return
 	}
-}
 
-func (r RocStr) Free() {
-	if r.Small() {
-		return
-	}
-
-	freeForRoc(unsafe.Pointer(r.bytes))
+	decRefCount(ptr)
 }

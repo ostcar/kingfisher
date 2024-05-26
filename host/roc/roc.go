@@ -51,7 +51,7 @@ func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rerun request: %w", err)
 		}
-		RocResponse(responseModel.response).Free()
+		RocResponse(responseModel.response).DecRef()
 		r.model = unsafe.Pointer(responseModel.model)
 	}
 
@@ -118,8 +118,7 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 	}
 
 	response := rocCallHandleReadRequest(rocRequest, &r.model)
-	// TODO: This should probably check the refcount
-	defer response.Free()
+	defer response.DecRef()
 
 	return Response{
 		Status:  int(response.status),
@@ -147,8 +146,7 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 		Headers: toGoHeaders(responseModel.Response().Headers()),
 		Body:    strings.Clone(RocStr(responseModel.response.body).String()),
 	}
-	// TODO: This should probably check the refcount
-	defer RocResponse(responseModel.response).Free()
+	defer RocResponse(responseModel.response).DecRef()
 
 	r.model = unsafe.Pointer(responseModel.model)
 	setRefCountToInfinity(r.model)
