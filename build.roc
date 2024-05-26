@@ -34,8 +34,7 @@ preprocess =
 
 buildForLegacyLinker : Task {} _
 buildForLegacyLinker =
-    # [ MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
-    [MacosArm64, MacosX64, LinuxArm64, LinuxX64]
+    [ MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
         |> List.map \target -> buildDotA target
         |> Task.seq
         |> Task.map! \_ -> {}
@@ -48,7 +47,7 @@ buildDotA = \target ->
             LinuxArm64 -> ("linux", "arm64", "aarch64-linux", "linux-arm64.a")
             LinuxX64 -> ("linux", "amd64", " x86_64-linux", "linux-x64.a")
             WindowsArm64 -> ("windows", "arm64", "aarch64-windows", "windows-arm64.a")
-            WindowsX64 -> ("windows", "amd64", "x86_64-windows", "windows-x64")
+            WindowsX64 -> ("windows", "amd64", "x86_64-windows", "windows-x64.a")
     Stdout.line! "build host for $(Inspect.toStr target)"
     Cmd.new "go"
         |> Cmd.envs [("GOOS", goos), ("GOARCH", goarch), ("CC", "zcc $(zigTarget)"), ("CGO_ENABLED", "1")]

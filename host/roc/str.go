@@ -11,7 +11,7 @@ func NewRocStr(str string) RocStr {
 	ptr := allocForRoc(len(str))
 
 	var rocStr RocStr
-	rocStr.len = C.ulong(len(str))
+	rocStr.len = C.size_t(len(str))
 	rocStr.capacity = rocStr.len
 	rocStr.bytes = (*C.char)(unsafe.Pointer(ptr))
 
