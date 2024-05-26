@@ -98,18 +98,20 @@ snapshot file.
 
 ## Build the platform
 
-The easiest way to build the platform is with [Task](https://taskfile.dev/).
+To build the platform from source, you need to install
+[roc](https://www.roc-lang.org/install), [go](https://go.dev/dl/) and
+[zig](https://ziglang.org/learn/getting-started/#installing-zig). Zig is used to
+crosscompile the go code. At the moment, it only works with zig `0.11.0`.
 
 Run:
 
-    task preprocess
+    roc run build.roc
 
-to preprocess the platform.
+to build the platform for linux, windows.
 
 Afterwards, the example can be run with:
 
-    roc run --prebuilt-platform examples/hello_world/main.roc
-
+    roc run examples/hello_world/main.roc
 
 
 ## License
