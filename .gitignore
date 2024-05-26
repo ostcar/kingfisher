@@ -7,6 +7,7 @@ platform/*.rh
 platform/*.rm
 platform/*.a
 platform/*.h
+platform/*.obj
 platform/*tar.br
 
 examples/hello_world/main
