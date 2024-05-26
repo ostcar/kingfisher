@@ -21,9 +21,9 @@ const intBytes = intSize / 8
 // one.
 func allocForRoc(size int) unsafe.Pointer {
 	refCountPtr := roc_alloc(C.ulong(size)+intBytes, intBytes)
-	refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-	refCountSlice[0] = refcount_one
-	return unsafe.Add(refCountPtr, intBytes)
+	ptr := unsafe.Add(refCountPtr, intBytes)
+	setRefCountToOne(ptr)
+	return ptr
 }
 
 // freeForRoc frees the memory with its refcounter.
@@ -37,29 +37,26 @@ func freeForRoc(ptr unsafe.Pointer) {
 // If the refcounter gets 0, the memory is freed.
 func decRefCount(ptr unsafe.Pointer) {
 	refcountPtr := unsafe.Add(ptr, -intBytes)
-	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
 
-	switch refCountSlice[0] {
+	switch *(*uint)(refcountPtr) {
 	case refcount_one:
 		freeForRoc(ptr)
 	case 0:
 		// Data is static. Nothing to do
 	default:
-		refCountSlice[0] -= 1
+		*(*uint)(refcountPtr) -= 1
 	}
 }
 
 func setRefCountToInfinity(ptr unsafe.Pointer) {
 	// Setting the refcount to 0 tells roc, not to modify it.
-	refcountPtr := unsafe.Add(ptr, -8)
-	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = 0
+	refcountPtr := unsafe.Add(ptr, -intBytes)
+	*(*uint)(refcountPtr) = 0
 }
 
 func setRefCountToOne(ptr unsafe.Pointer) {
-	refcountPtr := unsafe.Add(ptr, -8)
-	refCountSlice := unsafe.Slice((*uint)(refcountPtr), 1)
-	refCountSlice[0] = refcount_one
+	refcountPtr := unsafe.Add(ptr, -intBytes)
+	*(*uint)(refcountPtr) = 0
 }
 
 //export roc_alloc
