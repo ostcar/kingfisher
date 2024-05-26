@@ -18,7 +18,7 @@ func NewRocList[t any](list []t) RocList[t] {
 
 	ptr := allocForRoc(len(list) * typeSize)
 
-	rocList.len = C.ulong(len(list))
+	rocList.len = C.size_t(len(list))
 	rocList.capacity = rocList.len
 	rocList.bytes = (*C.char)(unsafe.Pointer(ptr))
 

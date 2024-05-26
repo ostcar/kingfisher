@@ -14,7 +14,14 @@ import (
 	"github.com/alecthomas/kong"
 )
 
-func main() {
+type cliConfig struct {
+	Addr         string `help:"Address to listen on." default:":8090"`
+	SnapshotFile string `help:"Path to the snapshot file." default:"db.snapshot" type:"path"`
+	RequestsFile string `help:"Path to the requests file." default:"db.requests" type:"path"`
+	NoSnapshot   bool   `help:"Disable snapshoting."`
+}
+
+func entry() {
 	var cli cliConfig
 
 	kong.Parse(&cli, kong.UsageOnError())
@@ -23,13 +30,6 @@ func main() {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-type cliConfig struct {
-	Addr         string `help:"Address to listen on." default:":8090"`
-	SnapshotFile string `help:"Path to the snapshot file." default:"db.snapshot" type:"path"`
-	RequestsFile string `help:"Path to the requests file." default:"db.requests" type:"path"`
-	NoSnapshot   bool   `help:"Disable snapshoting."`
 }
 
 func run(cli cliConfig) (err error) {

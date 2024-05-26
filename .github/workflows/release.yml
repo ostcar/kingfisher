@@ -16,9 +16,6 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Install Task
-        uses: arduino/setup-task@v2
-
       - name: Install Roc
         uses: hasnep/setup-roc@main
         with:
@@ -35,7 +32,7 @@ jobs:
           version: 0.12.0
 
       - name: Build platform
-        run: task preprocess
+        run: roc run build.roc
 
       - name: Bundle and release the library
         uses: hasnep/bundle-roc-library@main

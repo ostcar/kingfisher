@@ -20,7 +20,7 @@ const intBytes = intSize / 8
 // allocForRoc allocates memory. Prefixes that memory with a refcounter set to
 // one.
 func allocForRoc(size int) unsafe.Pointer {
-	refCountPtr := roc_alloc(C.ulong(size)+intBytes, intBytes)
+	refCountPtr := roc_alloc(C.size_t(size)+intBytes, intBytes)
 	ptr := unsafe.Add(refCountPtr, intBytes)
 	setRefCountToOne(ptr)
 	return ptr
@@ -60,13 +60,13 @@ func setRefCountToOne(ptr unsafe.Pointer) {
 }
 
 //export roc_alloc
-func roc_alloc(size C.ulong, alignment int) unsafe.Pointer {
+func roc_alloc(size C.size_t, alignment int) unsafe.Pointer {
 	_ = alignment
 	return C.malloc(size)
 }
 
 //export roc_realloc
-func roc_realloc(ptr unsafe.Pointer, newSize, _ C.ulong, alignment int) unsafe.Pointer {
+func roc_realloc(ptr unsafe.Pointer, newSize, _ C.size_t, alignment int) unsafe.Pointer {
 	_ = alignment
 	return C.realloc(ptr, newSize)
 }

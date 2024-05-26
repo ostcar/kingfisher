@@ -1,11 +1,16 @@
 host/libapp.so
+host/libhost.a
+host/libhost.h
 platform/dynhost
 platform/libapp.so
 platform/*.rh
 platform/*.rm
+platform/*.a
+platform/*.h
 platform/*tar.br
+
 examples/hello_world/main
-.task
+build
 
 db.requests
 db.snapshot
