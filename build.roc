@@ -25,7 +25,8 @@ buildDynhost =
     Cmd.new "go"
         |> Cmd.args ("build -C host -buildmode pie -o ../platform/dynhost" |> Str.split " ")
         |> Cmd.envs [("GOOS", "linux"), ("GOARCH", "amd64"), ("CC", "zig cc")]
-        |> Cmd.status!
+        |> Cmd.status
+        |> Task.mapErr! \_ -> BuildDynhost
 
 preprocess =
     Cmd.exec! "roc" ("preprocess-host examples/hello_world/main.roc" |> Str.split " ")
@@ -37,7 +38,8 @@ buildForLegacyLinker =
     [ MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
         |> List.map \target -> buildDotA target
         |> Task.seq
-        |> Task.map! \_ -> {}
+        |> Task.map \_ -> {}
+        |> Task.mapErr! \_ -> BuildForLegacyLinker
 
 buildDotA = \target ->
     (goos, goarch, zigTarget, prebuiltBinary) =
