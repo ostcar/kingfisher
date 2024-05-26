@@ -1,9 +1,37 @@
 package roc
 
+/*
+#cgo LDFLAGS: -L.. -lapp
+#include "./host.h"
+*/
 import "C"
 import (
 	"unsafe"
 )
+
+func rocCallDecodeModel(decodeArg RocDecodeArg) ResultModel {
+	var result ResultModel
+	C.roc__mainForHost_0_caller(decodeArg.CPtr(), nil, result.CPtr())
+	return result
+}
+
+func rocCallEncodeModel(model *unsafe.Pointer) RocList[byte] {
+	var result RocList[byte]
+	C.roc__mainForHost_1_caller(model, nil, result.CPtr())
+	return result
+}
+
+func rocCallHandleReadRequest(request RocRequest, model *unsafe.Pointer) RocResponse {
+	var result RocResponse
+	C.roc__mainForHost_2_caller(request.CPtr(), model, nil, result.CPtr())
+	return result
+}
+
+func rocCallWriteReadRequest(request RocRequest, model *unsafe.Pointer) RocResponseModel {
+	var result RocResponseModel
+	C.roc__mainForHost_3_caller(request.CPtr(), model, nil, result.CPtr())
+	return result
+}
 
 type RocDecodeArg C.struct_DecodeArg
 
@@ -56,10 +84,9 @@ func (r RocResponse) Headers() RocList[RocHeader] {
 	return *(*RocList[RocHeader])(unsafe.Pointer(&ctypeList))
 }
 
-func (r RocResponse) Free() {
+func (r RocResponse) DecRef() {
 	RocStr(r.body).DecRef()
-	// TODO: Do RocHeaders also need to use DecRef?
-	RocList[RocHeader](r.headers).Free()
+	RocList[RocHeader](r.headers).DecRef()
 }
 
 type RocHeader C.struct_Header
@@ -68,9 +95,9 @@ func (r RocHeader) C() C.struct_Header {
 	return C.struct_Header(r)
 }
 
-func (r RocHeader) Free() {
+func (r RocHeader) DecRef() {
 	RocStr(r.name).DecRef()
-	RocList[byte](r.value).Free()
+	RocList[byte](r.value).DecRef()
 }
 
 type RocResponseModel C.struct_ResponseModel

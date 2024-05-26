@@ -8,24 +8,22 @@ import (
 type RocList[t any] C.struct_RocList
 
 func NewRocList[t any](list []t) RocList[t] {
+	if len(list) == 0 {
+		return RocList[t]{}
+	}
+
+	var rocList RocList[t]
 	var zero t
 	typeSize := int(unsafe.Sizeof(zero))
 
-	var rocList RocList[t]
-	if len(list) > 0 {
-		// TODO: 8 only works for 64bit. Use the correct size.
-		refCountPtr := roc_alloc(C.ulong(len(list)*typeSize+8), 8)
-		refCountSlice := unsafe.Slice((*uint)(refCountPtr), 1)
-		refCountSlice[0] = refcount_one
-		startPtr := unsafe.Add(refCountPtr, 8)
+	ptr := allocForRoc(len(list) * typeSize)
 
-		rocList.len = C.ulong(len(list))
-		rocList.capacity = rocList.len
-		rocList.bytes = (*C.char)(unsafe.Pointer(startPtr))
+	rocList.len = C.ulong(len(list))
+	rocList.capacity = rocList.len
+	rocList.bytes = (*C.char)(unsafe.Pointer(ptr))
 
-		dataSlice := unsafe.Slice((*t)(startPtr), len(list))
-		copy(dataSlice, list)
-	}
+	dataSlice := unsafe.Slice((*t)(ptr), len(list))
+	copy(dataSlice, list)
 
 	return rocList
 }
@@ -43,31 +41,23 @@ func (r *RocList[t]) CPtr() *C.struct_RocList {
 	return (*C.struct_RocList)(r)
 }
 
-type Freer interface {
-	Free()
-}
-
-func (r RocList[t]) Free() {
+func (r RocList[t]) DecRef() {
 	ptr := unsafe.Pointer(r.bytes)
 	if ptr == nil {
 		return
 	}
 
+	type decRefer interface {
+		DecRef()
+	}
+
 	for _, e := range r.List() {
-		hasFree, ok := any(e).(Freer)
+		hasDecRef, ok := any(e).(decRefer)
 		if !ok {
 			break
 		}
-		hasFree.Free()
+		hasDecRef.DecRef()
 	}
 
-	refcountPtr := unsafe.Add(unsafe.Pointer(ptr), -8)
-	refCountSlice := unsafe.Slice((*uint64)(refcountPtr), 1)
-	if refCountSlice[0] == 0 {
-		return
-	}
-
-	// TODO Fix for non 64 systems
-	refCountPtr := unsafe.Add(ptr, -8)
-	roc_dealloc(refCountPtr, 0)
+	decRefCount(ptr)
 }
