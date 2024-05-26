@@ -13,11 +13,12 @@ tasks:
 
   dynhost:
     cmds:
-      - CC="zig cc" go build -C host -buildmode=pie -o ../platform/dynhost
+      - CC="zig cc" go build -C host -buildmode pie -o ../platform/dynhost
     sources:
       - host/go.mod
       - host/go.sum
       - host/main.go
+      - host/main-for-surgical.go
       - "host/*/*.go"
       - host/roc/host.h
       - host/libapp.so
@@ -37,10 +38,33 @@ tasks:
       - platform/metadata_linux_x64.rm
     deps:
       - dynhost
+
+  dotA:
+    cmds:
+      - CC="zig cc" go build -C host -buildmode c-archive -tags legacy -o ../platform/linux-x64.a
+    sources:
+      - host/go.mod
+      - host/go.sum
+      - host/main.go
+      - host/main-for-surgical.go
+      - "host/*/*.go"
+      - host/roc/host.h
+      - host/libapp.so
+    generates:
+      - platform/linux-x64.a
+
+  build:
+    deps:
+      - preprocess
+      - dotA
     
   run:
     cmds:
       - roc run --prebuilt-platform examples/hello_world/main.roc
     deps:
       - preprocess
+  
+  clean:
+    cmds:
+      - git clean -dfX
     
