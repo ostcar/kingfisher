@@ -12,7 +12,5 @@ platform/*tar.br
 examples/hello_world/main
 build
 
-.task
-
 db.requests
 db.snapshot
