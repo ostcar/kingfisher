@@ -52,7 +52,7 @@ buildDotA = \target ->
             WindowsX64 -> ("windows", "amd64", "x86_64-windows", "windows-x64.obj")
     Stdout.line! "build host for $(Inspect.toStr target)"
     Cmd.new "go"
-        |> Cmd.envs [("GOOS", goos), ("GOARCH", goarch), ("CC", "zcc $(zigTarget)"), ("CGO_ENABLED", "1")]
+        |> Cmd.envs [("GOOS", goos), ("GOARCH", goarch), ("CC", "zig cc -target $(zigTarget)"), ("CGO_ENABLED", "1")]
         |> Cmd.args ("build -C host -buildmode c-archive -o ../platform/$(prebuiltBinary) -tags legacy,netgo" |> Str.split " ")
         |> Cmd.status
         |> Task.mapErr! \err -> BuildErr target (Inspect.toStr err)
