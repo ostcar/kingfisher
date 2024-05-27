@@ -35,7 +35,7 @@ preprocess =
 
 buildForLegacyLinker : Task {} _
 buildForLegacyLinker =
-    [ MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
+    [MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
         |> List.map \target -> buildDotA target
         |> Task.seq
         |> Task.map \_ -> {}
