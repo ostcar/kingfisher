@@ -1,39 +1,65 @@
 platform "webserver"
-    requires { Model } { main : _ }
+    requires { Model } { server : {
+        initModel : Model,
+        updateModel : List Event, Model -> Model,
+        respond : Request, Model -> Task Response [ServerErr Str]_,
+    } }
     exposes []
     packages {}
-    imports [Webserver.{ Request, Response }]
+    imports [Webserver.{ Request, Response, Event }, Stderr]
     provides [mainForHost]
 
 ProgramForHost : {
-    decodeModel : [Init, Existing (List U8)] -> Result (Box Model) Str,
-    encodeModel : Box Model -> List U8,
-    handleReadRequest : Request, Box Model -> Response,
-    handleWriteRequest : Request, Box Model -> (Response, Box Model),
+    initModel : Box Model,
+    updateModel : List Event, Box Model -> Box Model,
+    respond : Request, Box Model -> Task Response [],
 }
 
 mainForHost : ProgramForHost
 mainForHost = {
-    decodeModel,
-    encodeModel,
-    handleReadRequest,
-    handleWriteRequest,
+    initModel,
+    updateModel,
+    respond,
 }
 
-decodeModel : [Init, Existing (List U8)] -> Result (Box Model) Str
-decodeModel = \fromHost ->
-    main.decodeModel fromHost
-    |> Result.map \model -> Box.box model
+initModel : Box Model
+initModel =
+    server.initModel
+    |> Box.box
 
-encodeModel : Box Model -> List U8
-encodeModel = \boxedModel ->
-    main.encodeModel (Box.unbox boxedModel)
+updateModel : List Event, Box Model -> Box Model
+updateModel = \eventList, boxedModel ->
+    server.updateModel eventList (Box.unbox boxedModel)
+    |> Box.box
 
-handleReadRequest : Request, Box Model -> Response
-handleReadRequest = \request, boxedModel ->
-    main.handleReadRequest request (Box.unbox boxedModel)
+respond : Request, Box Model -> Task Response []
+respond = \request, boxedModel ->
+    when server.respond request (Box.unbox boxedModel) |> Task.result! is
+        Ok response -> Task.ok response
+        Err (ServerErr msg) ->
+            Stderr.line msg
+                |> Task.onErr! \_ -> crash "unable to write to stderr"
 
-handleWriteRequest : Request, Box Model -> (Response, Box Model)
-handleWriteRequest = \request, boxedModel ->
-    (resp, newModel) = main.handleWriteRequest request (Box.unbox boxedModel)
-    (resp, newModel |> Box.box)
+            # returns a http server error response
+            Task.ok {
+                status: 500,
+                headers: [],
+                body: [],
+            }
+
+        Err err ->
+            """
+            Server error:
+                $(Inspect.toStr err)
+
+            Tip: If you do not want to see this error, use `Task.mapErr` to handle the error.
+            Docs for `Task.mapErr`: <https://www.roc-lang.org/builtins/Task#mapErr>
+            """
+                |> Stderr.line
+                |> Task.onErr! \_ -> crash "unable to write to stderr"
+
+            Task.ok {
+                status: 500,
+                headers: [],
+                body: [],
+            }

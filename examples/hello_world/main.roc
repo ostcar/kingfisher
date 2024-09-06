@@ -1,63 +1,50 @@
-app [main, Model] {
+app [server, Model] {
     webserver: platform "../../platform/main.roc",
-}
-
-import webserver.Webserver exposing [Request, Response]
-
-Program : {
-    decodeModel : [Init, Existing (List U8)] -> Result Model Str,
-    encodeModel : Model -> List U8,
-    handleReadRequest : Request, Model -> Response,
-    handleWriteRequest : Request, Model -> (Response, Model),
 }
 
 Model : Str
 
-main : Program
-main = {
-    decodeModel,
-    encodeModel,
-    handleReadRequest,
-    handleWriteRequest,
+server = {
+    initModel,
+    updateModel,
+    respond,
 }
 
-decodeModel : [Init, Existing (List U8)] -> Result Model Str
-decodeModel = \fromPlatform ->
-    when fromPlatform is
-        Init ->
-            Ok "World"
+# TODO: I don't like initModel. Would it be possible to make the Model in updateModel optional and start with an empty event?
+initModel = "World"
 
-        Existing encoded ->
-            encoded
-            |> Str.fromUtf8
-            |> Result.mapErr \_ -> "Error: Can not decode database."
+updateModel = \eventList, model ->
+    List.walk
+        eventList
+        model
+        \event, _ ->
+            event
 
-encodeModel : Model -> List U8
-encodeModel = \model ->
-    model |> Str.toUtf8
+respond = \request, model ->
+    when request.method is
+        Get ->
+            Task.ok! {
+                body: "Hello $(model)\n" |> Str.toUtf8,
+                headers: [],
+                status: 200,
+            }
 
-handleReadRequest : Request, Model -> Response
-handleReadRequest = \_request, model -> {
-    body: "Hello $(model)\n" |> Str.toUtf8,
-    headers: [],
-    status: 200,
-}
+        Post saveEvent ->
+            newModel =
+                if List.isEmpty request.body then
+                    "World"
+                else
+                    request.body
+                    |> Str.fromUtf8
+                    |> Result.withDefault "invalid body"
+            saveEvent newModel
+                |> Task.mapErr! \_ -> ServerErr "Can not save event"
+            Task.ok! {
+                body: newModel |> Str.toUtf8,
+                headers: [],
+                status: 200,
+            }
 
-handleWriteRequest : Request, Model -> (Response, Model)
-handleWriteRequest = \request, _model ->
-    newModel =
-        if List.isEmpty request.body then
-            "World"
-        else
-            request.body 
-            |> Str.fromUtf8 
-            |> Result.withDefault "invalid body"
+        _ ->
+            Task.err! (ServerErr "Unknown request method")
 
-    (
-        {
-            body: newModel |> Str.toUtf8,
-            headers: [],
-            status: 200,
-        },
-        newModel,
-    )

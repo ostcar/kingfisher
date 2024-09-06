@@ -2,11 +2,26 @@ module [
     Request,
     Response,
     Header,
+    Event,
 ]
 
-# Request is the same as: https://github.com/roc-lang/basic-webserver/blob/main/platform/InternalHttp.roc
+Event : Str
+SaveEvent : Event -> Task {} [SaveFailed]
+
+RequestMethod : [
+    Options,
+    Get,
+    Post SaveEvent,
+    Put SaveEvent,
+    Delete SaveEvent,
+    Head,
+    Trace,
+    Connect,
+    Patch SaveEvent,
+]
+
 Request : {
-    method : [Options, Get, Post, Put, Delete, Head, Trace, Connect, Patch],
+    method : RequestMethod,
     headers : List Header,
     url : Str,
     mimeType : Str,
