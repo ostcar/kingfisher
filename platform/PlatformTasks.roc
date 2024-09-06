@@ -26,6 +26,7 @@ hosted PlatformTasks
         commandStatus,
         commandOutput,
         tempDir,
+        saveEvent,
     ]
     imports []
 
@@ -34,6 +35,8 @@ import InternalFile
 import InternalTcp
 import InternalCommand
 import InternalError
+
+saveEvent : Str -> Task {} Str
 
 # Stdout
 stdoutLine : Str -> Task {} Str

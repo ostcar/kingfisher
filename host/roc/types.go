@@ -9,51 +9,54 @@ import (
 	"unsafe"
 )
 
-func rocCallDecodeModel(decodeArg RocDecodeArg) ResultModel {
+func rocCallUpdateModel(events RocList[RocStr], model MaybeModel) ResultModel {
 	var result ResultModel
-	C.roc__mainForHost_0_caller(decodeArg.CPtr(), nil, result.CPtr())
+	C.roc__mainForHost_2_caller(events.CPtr(), model.CPtr(), nil, result.CPtr())
 	return result
 }
 
-func rocCallEncodeModel(model *unsafe.Pointer) RocList[byte] {
-	var result RocList[byte]
-	C.roc__mainForHost_1_caller(model, nil, result.CPtr())
+func rocCallRespond(request RocRequest, model *unsafe.Pointer) ResultResponse {
+	size := C.roc__mainForHost_0_result_size()
+	capturePtr := roc_alloc(size, 0)
+	defer roc_dealloc(capturePtr, 0)
+
+	C.roc__mainForHost_0_caller(request.CPtr(), model, nil, capturePtr)
+
+	var result ResultResponse
+	C.roc__mainForHost_1_caller(nil, capturePtr, result.CPtr())
 	return result
 }
 
-func rocCallHandleReadRequest(request RocRequest, model *unsafe.Pointer) RocResponse {
-	var result RocResponse
-	C.roc__mainForHost_2_caller(request.CPtr(), model, nil, result.CPtr())
-	return result
+type ResultResponse C.struct_ResultResponse
+
+func (r *ResultResponse) CPtr() *C.struct_ResultResponse {
+	return (*C.struct_ResultResponse)(r)
 }
 
-func rocCallWriteReadRequest(request RocRequest, model *unsafe.Pointer) RocResponseModel {
-	var result RocResponseModel
-	C.roc__mainForHost_3_caller(request.CPtr(), model, nil, result.CPtr())
-	return result
-}
-
-type RocDecodeArg C.struct_DecodeArg
-
-func decodeArgInit() RocDecodeArg {
-	return RocDecodeArg{
-		discriminant: 1,
+func (r ResultResponse) result() RocResponse {
+	switch r.disciminant {
+	case 0: // Ok
+		return (*(*RocResponse)(unsafe.Pointer(&r.payload)))
+	default:
+		panic("invalid disciminat")
 	}
 }
 
-func decodeArgExisting(list RocList[byte]) RocDecodeArg {
-	return RocDecodeArg{
-		discriminant: 0,
-		payload:      *(*[24]byte)(unsafe.Pointer(&list)),
+type MaybeModel C.struct_MaybeModel
+
+func MaybeModelInit() MaybeModel {
+	return MaybeModel{disciminant: 1}
+}
+
+func MaybeModelExisting(model unsafe.Pointer) MaybeModel {
+	return MaybeModel{
+		disciminant: 0,
+		payload:     *(*[8]byte)(unsafe.Pointer(&model)),
 	}
 }
 
-func (r RocDecodeArg) C() C.struct_DecodeArg {
-	return C.struct_DecodeArg(r)
-}
-
-func (r *RocDecodeArg) CPtr() *C.struct_DecodeArg {
-	return (*C.struct_DecodeArg)(r)
+func (m *MaybeModel) CPtr() *C.struct_MaybeModel {
+	return (*C.struct_MaybeModel)(m)
 }
 
 type ResultModel C.struct_ResultModel
@@ -100,16 +103,6 @@ func (r RocHeader) DecRef() {
 	RocList[byte](r.value).DecRef()
 }
 
-type RocResponseModel C.struct_ResponseModel
-
-func (r RocResponseModel) Response() RocResponse {
-	return *(*RocResponse)(unsafe.Pointer(&r.response))
-}
-
-func (r *RocResponseModel) CPtr() *C.struct_ResponseModel {
-	return (*C.struct_ResponseModel)(r)
-}
-
 type RocRequest C.struct_Request
 
 func (r *RocRequest) CPtr() *C.struct_Request {
@@ -134,3 +127,7 @@ func requestTimeoutNoTimeout() RocRequestTimeout {
 func (r RocRequestTimeout) C() C.struct_RequestTimeout {
 	return C.struct_RequestTimeout(r)
 }
+
+type RocResultVoidVoid C.struct_ResultVoidVoid
+
+type RocResultVoidString C.struct_ResultVoidStr

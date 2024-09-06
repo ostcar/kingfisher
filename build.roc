@@ -1,9 +1,8 @@
 app [main] {
-    cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.10.0/vNe6s9hWzoTZtFmNkvEICPErI9ptji_ySjicO6CkucY.tar.br",
+    cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.15.0/SlwdbJ-3GR7uBWQo6zlmYWNYOxnvo8r6YABXD-45UOw.tar.br",
 }
 
 import cli.Cmd
-import cli.Task exposing [Task]
 import cli.File
 import cli.Path
 import cli.Stdout
@@ -31,13 +30,13 @@ buildDynhost =
 preprocess =
     Cmd.exec! "roc" ("preprocess-host examples/hello_world/main.roc" |> Str.split " ")
     # roc preprocess creates libapp.so, that is not needed.
-    File.delete! ("platform/libapp.so" |> Path.fromStr)
+    File.delete! ("platform/libapp.so")
 
 buildForLegacyLinker : Task {} _
 buildForLegacyLinker =
     [MacosArm64, MacosX64, LinuxArm64, LinuxX64, WindowsArm64, WindowsX64]
         |> List.map \target -> buildDotA target
-        |> Task.seq
+        |> Task.sequence
         |> Task.map \_ -> {}
         |> Task.mapErr! \_ -> BuildForLegacyLinker
 

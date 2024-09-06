@@ -50,6 +50,7 @@ func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 		var response roc.Response
 		var err error
 
+		// TODO: this is not needed anymore. Just give the request
 		request, err := roc.RequestFromHTTP(r)
 		if err != nil {
 			http.Error(w, "Error", 500)
@@ -58,7 +59,7 @@ func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 
 		var outErr error
 		if isWriteRequest(r.Method) {
-			writer, err := db.RequestsWriter()
+			writer, err := db.EventsWriter()
 			if err != nil {
 				http.Error(w, "Error", 500)
 				return

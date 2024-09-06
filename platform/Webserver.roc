@@ -3,10 +3,14 @@ module [
     Response,
     Header,
     Event,
+    requestFromHost,
+    HostRequest,
 ]
 
+import PlatformTasks
+
 Event : Str
-SaveEvent : Event -> Task {} [SaveFailed]
+SaveEvent : Event -> Task {} Str
 
 RequestMethod : [
     Options,
@@ -35,4 +39,47 @@ Response : {
     body : List U8,
 }
 
-Header : { name : Str, value : List U8 }
+Header : { name : Str, value : Str }
+
+HostRequestMethod : [
+    Options,
+    Get,
+    Post,
+    Put,
+    Delete,
+    Head,
+    Trace,
+    Connect,
+    Patch,
+]
+
+HostRequest : {
+    method : HostRequestMethod,
+    headers : List Header,
+    url : Str,
+    mimeType : Str,
+    body : List U8,
+    timeout : [TimeoutMilliseconds U64, NoTimeout],
+}
+
+requestFromHost : HostRequest -> Request
+requestFromHost = \fromHost ->
+    method =
+        when fromHost.method is
+            Post -> Post PlatformTasks.saveEvent
+            Put -> Put PlatformTasks.saveEvent
+            Delete -> Delete PlatformTasks.saveEvent
+            Patch -> Patch PlatformTasks.saveEvent
+            Options -> Options
+            Get -> Get
+            Head -> Head
+            Trace -> Trace
+            Connect -> Connect
+    {
+        headers: fromHost.headers,
+        url: fromHost.url,
+        mimeType: fromHost.mimeType,
+        body: fromHost.body,
+        timeout: fromHost.timeout,
+        method: method,
+    }

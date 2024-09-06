@@ -5,20 +5,17 @@ app [server, Model] {
 Model : Str
 
 server = {
-    initModel,
     updateModel,
     respond,
 }
 
-# TODO: I don't like initModel. Would it be possible to make the Model in updateModel optional and start with an empty event?
-initModel = "World"
-
-updateModel = \eventList, model ->
+updateModel = \eventList, _initOrModel ->
     List.walk
         eventList
-        model
-        \event, _ ->
+        "World"
+        \_, event ->
             event
+    |> Ok
 
 respond = \request, model ->
     when request.method is
@@ -26,7 +23,7 @@ respond = \request, model ->
             Task.ok! {
                 body: "Hello $(model)\n" |> Str.toUtf8,
                 headers: [],
-                status: 200,
+                status: 205,
             }
 
         Post saveEvent ->
@@ -42,7 +39,7 @@ respond = \request, model ->
             Task.ok! {
                 body: newModel |> Str.toUtf8,
                 headers: [],
-                status: 200,
+                status: 201,
             }
 
         _ ->

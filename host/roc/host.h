@@ -23,7 +23,7 @@ struct RequestTimeout {
 
 struct Header {
     struct RocStr name;
-    struct RocList value;
+    struct RocStr value;
 };
 
 struct Request {
@@ -41,20 +41,7 @@ struct Response {
     short unsigned int status;
 };
 
-struct ResponseModel {
-    struct Response response;
-    void* *model;
-};
-
-union DecodeArgUnion {
-    struct RocList bytes;
-};
-
-struct DecodeArg {
-    union DecodeArgUnion payload;
-    unsigned char discriminant;
-};
-
+// TODO: Can the union be directly inside ResultModel? Same above
 union ResultModelUnion {
     struct RocStr error;
     void* *model;
@@ -65,14 +52,43 @@ struct ResultModel {
     unsigned char disciminant;
 };
 
-// decodeModel
-extern void roc__mainForHost_0_caller(const struct DecodeArg *arg, void* something, const struct ResultModel *resultModel);
+union ResultResponseUnion {
+    struct Response response;
+};
 
-// encodeModel
-extern void roc__mainForHost_1_caller(void* *model, void* something, struct RocList *bytes);
+// TODO: Does this even have a disciminant??
+struct ResultResponse {
+    union ResultResponseUnion payload;
+    unsigned char disciminant;
+};
 
-// handleReadRequest
-extern void roc__mainForHost_2_caller(const struct Request *request, void* *model,  void* something, const struct Response *response );
+// TODO: Is this needed or can *model be directly used in MaybeModel?
+union MaybeModelUnion {
+    void* *model;
+};
 
-// handleWriteRequest
-extern void roc__mainForHost_3_caller(const struct Request *request, void* *model,  void* something, const struct ResponseModel *responseModel );
+struct MaybeModel {
+    union MaybeModelUnion payload;
+    unsigned char disciminant;
+};
+
+struct ResultVoidVoid {
+    unsigned char disciminant;
+};
+
+struct ResultVoidStr {
+    struct RocStr payload;
+    unsigned char disciminant;
+};
+
+
+// updateModel
+extern void roc__mainForHost_2_caller(const struct RocList *events, const struct MaybeModel *maybeModel, void* something, const struct ResultModel *resultModel);
+
+// respond
+extern void roc__mainForHost_0_caller(const struct Request *request, void* *model,  void* something, void* captures );
+
+size_t roc__mainForHost_0_result_size();
+extern void roc__mainForHost_1_caller(char* flags, void* closure_data, struct ResultResponse *result);
+
+

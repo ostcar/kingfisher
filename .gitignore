@@ -13,5 +13,4 @@ platform/*tar.br
 examples/hello_world/main
 build
 
-db.requests
-db.snapshot
+db.events

@@ -3,8 +3,7 @@ package roc
 import "C"
 
 import (
-	"encoding/json"
-	"errors"
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,55 +13,60 @@ import (
 	"unsafe"
 )
 
+var currentEvents []RocStr // This has to be global as long as effects don't get a hidden argument.
+
 // Roc holds the connection to roc.
 type Roc struct {
-	mu sync.RWMutex
-
+	mu    sync.RWMutex
 	model unsafe.Pointer
 }
 
 // New initializes the connection to roc.
-func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
-	decodeArg := decodeArgInit()
-	if encodedModel != nil {
-		decodeArg = decodeArgExisting(NewRocList(encodedModel))
-	}
-	mayModel := rocCallDecodeModel(decodeArg)
+func New(eventReader io.Reader) (*Roc, error) {
+	buf := bufio.NewReader(eventReader)
 
-	var model unsafe.Pointer
-	model, errStr, ok := mayModel.result()
-	if !ok {
-		return nil, fmt.Errorf("decoding model: Roc returned: %s", errStr)
+	var events []RocStr
+	for {
+		str, err := buf.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("reading from eventReader: %w", err)
+		}
+
+		events = append(events, NewRocStr(str[0:len(str)-1]))
+	}
+
+	rocEvents := NewRocList(events)
+
+	model, err, success := rocCallUpdateModel(rocEvents, MaybeModelInit()).result()
+	if !success {
+		return nil, fmt.Errorf("can not update model: %s", err.String())
 	}
 
 	r := Roc{model: model}
-
-	decoder := json.NewDecoder(reader)
-	for {
-		var request Request
-		if err := decoder.Decode(&request); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("decoding data: %w", err)
-		}
-
-		responseModel, err := r.runWriteRequest(request)
-		if err != nil {
-			return nil, fmt.Errorf("rerun request: %w", err)
-		}
-		RocResponse(responseModel.response).DecRef()
-		r.model = unsafe.Pointer(responseModel.model)
-	}
 
 	setRefCountToInfinity(r.model)
 
 	return &r, nil
 }
 
-// DumpModel returns a []byte reprsentation of the model.
-func (r *Roc) DumpModel() []byte {
-	return rocCallEncodeModel(&r.model).List()
+//export roc_fx_saveEvent
+func roc_fx_saveEvent(event *RocStr) RocResultVoidString {
+	currentEvents = append(currentEvents, *event)
+	return RocResultVoidString{
+		disciminant: 1,
+	}
+}
+
+//export roc_fx_stderrLine
+func roc_fx_stderrLine(msg *RocStr) RocResultVoidString {
+	// TODO: use stderr
+	fmt.Println(*msg)
+	return RocResultVoidString{
+		disciminant: 1,
+	}
 }
 
 // Request represents an http request
@@ -87,6 +91,7 @@ type Response struct {
 	Body    string
 }
 
+// TODO: can we use http.Request and http.Response now?
 // RequestFromHTTP creates a Request object from an http.Request.
 func RequestFromHTTP(r *http.Request) (Request, error) {
 	body, err := io.ReadAll(r.Body)
@@ -117,7 +122,7 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 		return Response{}, fmt.Errorf("convert request: %w", err)
 	}
 
-	response := rocCallHandleReadRequest(rocRequest, &r.model)
+	response := rocCallRespond(rocRequest, &r.model).result()
 	defer response.DecRef()
 
 	return Response{
@@ -128,40 +133,41 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 }
 
 // WriteRequest handles a write request.
+// TODO: this is nearly the same as ReadRequest
 func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	responseModel, err := r.runWriteRequest(request)
-	if err != nil {
-		return Response{}, err
-	}
-
-	if err := json.NewEncoder(db).Encode(request); err != nil {
-		return Response{}, fmt.Errorf("encode request: %w", err)
-	}
-
-	response := Response{
-		Status:  int(responseModel.response.status),
-		Headers: toGoHeaders(responseModel.Response().Headers()),
-		Body:    strings.Clone(RocStr(responseModel.response.body).String()),
-	}
-	defer RocResponse(responseModel.response).DecRef()
-
-	r.model = unsafe.Pointer(responseModel.model)
-	setRefCountToInfinity(r.model)
-
-	return response, nil
-}
-
-func (r *Roc) runWriteRequest(request Request) (RocResponseModel, error) {
 	rocRequest, err := convertRequest(request)
 	if err != nil {
-		return RocResponseModel{}, fmt.Errorf("convert request: %w", err)
+		return Response{}, fmt.Errorf("convert request: %w", err)
+	}
+	setRefCountToInfinity(unsafe.Pointer(&rocRequest.body.bytes))
+
+	currentEvents = []RocStr{}
+	response := rocCallRespond(rocRequest, &r.model).result()
+	defer response.DecRef()
+
+	var events = NewRocList(currentEvents)
+	var existingModel = MaybeModelExisting(r.model)
+
+	newModel, failMsg, success := rocCallUpdateModel(events, existingModel).result()
+	if !success {
+		return Response{}, fmt.Errorf("got invalid model: %s", failMsg)
 	}
 
-	setRefCountToOne(r.model)
-	return rocCallWriteReadRequest(rocRequest, &r.model), nil
+	for _, event := range currentEvents {
+		fmt.Fprintln(db, event.String())
+	}
+
+	r.model = newModel
+
+	return Response{
+		Status:  int(response.status),
+		Headers: toGoHeaders(response.Headers()),
+		Body:    strings.Clone(RocStr(response.body).String()),
+	}, nil
+
 }
 
 func convertRequest(r Request) (RocRequest, error) {
@@ -186,7 +192,7 @@ func toRocHeader(goHeader map[string][]string) RocList[RocHeader] {
 	headers := make([]RocHeader, 0, len(goHeader))
 	for name, valueList := range goHeader {
 		for _, value := range valueList {
-			headers = append(headers, RocHeader{name: NewRocStr(name).C(), value: NewRocList([]byte(value)).C()})
+			headers = append(headers, RocHeader{name: NewRocStr(name).C(), value: NewRocStr(value).C()})
 		}
 	}
 

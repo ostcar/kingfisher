@@ -1,7 +1,6 @@
 platform "webserver"
     requires { Model } { server : {
-        initModel : Model,
-        updateModel : List Event, Model -> Model,
+        updateModel : List Event, [Init, Existing Model] -> Result Model Str,
         respond : Request, Model -> Task Response [ServerErr Str]_,
     } }
     exposes []
@@ -9,31 +8,31 @@ platform "webserver"
     imports [Webserver.{ Request, Response, Event }, Stderr]
     provides [mainForHost]
 
-ProgramForHost : {
-    initModel : Box Model,
-    updateModel : List Event, Box Model -> Box Model,
-    respond : Request, Box Model -> Task Response [],
+ServerForHost : {
+    updateModel : List Event, [Init, Existing (Box Model)] -> Result (Box Model) Str,
+    respond : Webserver.HostRequest, Box Model -> Task Response [],
 }
 
-mainForHost : ProgramForHost
+mainForHost : ServerForHost
 mainForHost = {
-    initModel,
     updateModel,
     respond,
 }
 
-initModel : Box Model
-initModel =
-    server.initModel
-    |> Box.box
+updateModel : List Event, [Init, Existing (Box Model)] -> Result (Box Model) Str
+updateModel = \eventList, maybeBoxedModel ->
+    maybeModel =
+        when maybeBoxedModel is
+            Init -> Init
+            Existing boxedModel -> Existing (Box.unbox boxedModel)
 
-updateModel : List Event, Box Model -> Box Model
-updateModel = \eventList, boxedModel ->
-    server.updateModel eventList (Box.unbox boxedModel)
-    |> Box.box
+    server.updateModel eventList maybeModel
+    |> Result.map Box.box
 
-respond : Request, Box Model -> Task Response []
-respond = \request, boxedModel ->
+respond : Webserver.HostRequest, Box Model -> Task Response []
+respond = \hostRequest, boxedModel ->
+    request = Webserver.requestFromHost hostRequest
+
     when server.respond request (Box.unbox boxedModel) |> Task.result! is
         Ok response -> Task.ok response
         Err (ServerErr msg) ->
