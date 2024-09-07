@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-const refcount_one = 1 << 63
+const refcountOne = 1 << 63
 const is64Bit = uint64(^uintptr(0)) == ^uint64(0)
 const intSize = 32 << (^uint(0) >> 63)
 const intBytes = intSize / 8
@@ -20,6 +20,7 @@ const intBytes = intSize / 8
 // allocForRoc allocates memory. Prefixes that memory with a refcounter set to
 // one.
 func allocForRoc(size int) unsafe.Pointer {
+	// TODO: find out alignment
 	refCountPtr := roc_alloc(C.size_t(size)+intBytes, intBytes)
 	ptr := unsafe.Add(refCountPtr, intBytes)
 	setRefCountToOne(ptr)
@@ -39,7 +40,7 @@ func decRefCount(ptr unsafe.Pointer) {
 	refcountPtr := unsafe.Add(ptr, -intBytes)
 
 	switch *(*uint)(refcountPtr) {
-	case refcount_one:
+	case refcountOne:
 		freeForRoc(ptr)
 	case 0:
 		// Data is static. Nothing to do
@@ -56,7 +57,7 @@ func setRefCountToInfinity(ptr unsafe.Pointer) {
 
 func setRefCountToOne(ptr unsafe.Pointer) {
 	refcountPtr := unsafe.Add(ptr, -intBytes)
-	*(*uint)(refcountPtr) = 0
+	*(*uint)(refcountPtr) = refcountOne
 }
 
 //export roc_alloc

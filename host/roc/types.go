@@ -88,7 +88,7 @@ func (r RocResponse) Headers() RocList[RocHeader] {
 }
 
 func (r RocResponse) DecRef() {
-	RocStr(r.body).DecRef()
+	RocList[byte](r.body).DecRef()
 	RocList[RocHeader](r.headers).DecRef()
 }
 
@@ -100,7 +100,7 @@ func (r RocHeader) C() C.struct_Header {
 
 func (r RocHeader) DecRef() {
 	RocStr(r.name).DecRef()
-	RocList[byte](r.value).DecRef()
+	RocStr(r.value).DecRef()
 }
 
 type RocRequest C.struct_Request

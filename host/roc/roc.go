@@ -206,7 +206,7 @@ func toGoHeaders(rocHeaders RocList[RocHeader]) []Header {
 	for i, header := range headerList {
 		goHeader[i] = Header{
 			Name:  strings.Clone(RocStr(header.name).String()),
-			Value: strings.Clone(string(RocList[byte](header.value).List())),
+			Value: strings.Clone(RocStr(header.value).String()),
 		}
 	}
 

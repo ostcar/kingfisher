@@ -1,7 +1,7 @@
 platform "webserver"
     requires { Model } { server : {
         updateModel : List Event, [Init, Existing Model] -> Result Model Str,
-        respond : Request, Model -> Task Response [ServerErr Str]_,
+        respond : Request, Model -> Task Response _,
     } }
     exposes []
     packages {}

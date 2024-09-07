@@ -5,10 +5,12 @@ module [
     Event,
     requestFromHost,
     HostRequest,
+    RequestMethod,
 ]
 
 import PlatformTasks
 
+# TODO: Event has to be (List U8). Also make sure on the host, that newline is allowed
 Event : Str
 SaveEvent : Event -> Task {} Str
 
