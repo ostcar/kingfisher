@@ -36,7 +36,7 @@ struct Request {
 };
 
 struct Response {
-    struct RocStr body;
+    struct RocList body;
     struct RocList headers;
     short unsigned int status;
 };
@@ -80,7 +80,6 @@ struct ResultVoidStr {
     struct RocStr payload;
     unsigned char disciminant;
 };
-
 
 // updateModel
 extern void roc__mainForHost_2_caller(const struct RocList *events, const struct MaybeModel *maybeModel, void* something, const struct ResultModel *resultModel);

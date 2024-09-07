@@ -26,20 +26,18 @@ func (r RocStr) Small() bool {
 }
 
 func (r RocStr) String() string {
-	// if r.Small() {
-	// 	fmt.Println("small")
-	// 	ptr := (*byte)(unsafe.Pointer(&r))
+	if r.Small() {
+		ptr := (*byte)(unsafe.Pointer(&r))
 
-	// 	byteLen := 12
-	// 	if is64Bit {
-	// 		byteLen = 24
-	// 	}
+		byteLen := 12
+		if is64Bit {
+			byteLen = 24
+		}
 
-	// 	shortStr := unsafe.String(ptr, byteLen)
-	// 	len := shortStr[byteLen-1] ^ 128
-	// 	fmt.Printf("len is %d\n", len)
-	// 	return shortStr[:len]
-	// }
+		shortStr := unsafe.String(ptr, byteLen)
+		len := shortStr[byteLen-1] ^ 128
+		return shortStr[:len]
+	}
 
 	// Remove the bit for seamless string
 	len := (uint(r.len) << 1) >> 1
@@ -49,6 +47,10 @@ func (r RocStr) String() string {
 
 func (r RocStr) C() C.struct_RocStr {
 	return C.struct_RocStr(r)
+}
+
+func (r *RocStr) CPtr() *C.struct_RocStr {
+	return (*C.struct_RocStr)(r)
 }
 
 func (r RocStr) DecRef() {

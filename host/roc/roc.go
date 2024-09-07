@@ -165,7 +165,7 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	return Response{
 		Status:  int(response.status),
 		Headers: toGoHeaders(response.Headers()),
-		Body:    strings.Clone(RocStr(response.body).String()),
+		Body:    strings.Clone(string(RocList[byte](response.body).List())),
 	}, nil
 
 }

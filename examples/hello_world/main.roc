@@ -23,7 +23,7 @@ respond = \request, model ->
             Task.ok! {
                 body: "Hello $(model)\n" |> Str.toUtf8,
                 headers: [],
-                status: 205,
+                status: 200,
             }
 
         Post saveEvent ->
@@ -39,7 +39,7 @@ respond = \request, model ->
             Task.ok! {
                 body: newModel |> Str.toUtf8,
                 headers: [],
-                status: 201,
+                status: 200,
             }
 
         _ ->
