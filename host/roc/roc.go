@@ -140,7 +140,6 @@ func (r *Roc) WriteRequest(request Request, eventWriter func(event ...[]byte) er
 	if err != nil {
 		return Response{}, fmt.Errorf("convert request: %w", err)
 	}
-	setRefCountToInfinity(unsafe.Pointer(&rocRequest.body.bytes))
 
 	currentEvents = [][]byte{}
 	response := rocCallRespond(rocRequest, &r.model).result()
@@ -159,6 +158,7 @@ func (r *Roc) WriteRequest(request Request, eventWriter func(event ...[]byte) er
 		if !success {
 			return Response{}, fmt.Errorf("got invalid model: %s", failMsg)
 		}
+		setRefCountToInfinity(newModel)
 
 		if err := eventWriter(currentEvents...); err != nil {
 			return Response{}, fmt.Errorf("can not save event: %w", err)
