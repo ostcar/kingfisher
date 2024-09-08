@@ -59,13 +59,7 @@ func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 
 		var outErr error
 		if isWriteRequest(r.Method) {
-			writer, err := db.EventsWriter()
-			if err != nil {
-				http.Error(w, "Error", 500)
-				return
-			}
-
-			response, outErr = rocApp.WriteRequest(request, writer)
+			response, outErr = rocApp.WriteRequest(request, db.EventsWriter)
 		} else {
 			response, outErr = rocApp.ReadRequest(request)
 		}

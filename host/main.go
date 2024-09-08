@@ -35,6 +35,7 @@ func run(cli cliConfig) (err error) {
 
 	db := database.FileDB{
 		EventsFile: cli.EventsFile,
+		EventType:  database.EventTypeLine, // TODO: create a config to set this
 	}
 
 	reader, err := db.EventsReader()

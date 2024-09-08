@@ -3,9 +3,9 @@ package roc
 import "C"
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/textproto"
 	"strings"
@@ -22,24 +22,14 @@ type Roc struct {
 }
 
 // New initializes the connection to roc.
-func New(eventReader io.Reader) (*Roc, error) {
+func New(eventReader iter.Seq2[[]byte, error]) (*Roc, error) {
 	var events []RocList[byte]
-	for {
-		// TODO: maybe write event len as string for easier reading of the fil.
-		var byteLen uint64
-		if err := binary.Read(eventReader, binary.LittleEndian, &byteLen); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, fmt.Errorf("read byte len from event reader: %w", err)
+	for event, err := range eventReader {
+		if err != nil {
+			return nil, fmt.Errorf("can not read event: %w", err)
 		}
 
-		buf := make([]byte, byteLen)
-		if _, err := io.ReadFull(eventReader, buf); err != nil {
-			return nil, fmt.Errorf("reading event from reader: %w", err)
-		}
-
-		events = append(events, NewRocList(buf))
+		events = append(events, NewRocList(event))
 	}
 
 	rocEvents := NewRocList(events)
@@ -142,7 +132,7 @@ func (r *Roc) ReadRequest(request Request) (Response, error) {
 
 // WriteRequest handles a write request.
 // TODO: this is nearly the same as ReadRequest
-func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
+func (r *Roc) WriteRequest(request Request, eventWriter func(event ...[]byte) error) (Response, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -170,11 +160,8 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 			return Response{}, fmt.Errorf("got invalid model: %s", failMsg)
 		}
 
-		for _, event := range currentEvents {
-			binary.Write(db, binary.LittleEndian, uint64(len(event)))
-			if _, err := db.Write(event); err != nil {
-				return Response{}, fmt.Errorf("saving event: %w", err)
-			}
+		if err := eventWriter(currentEvents...); err != nil {
+			return Response{}, fmt.Errorf("can not save event: %w", err)
 		}
 
 		r.model = newModel
