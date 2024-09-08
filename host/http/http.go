@@ -71,7 +71,7 @@ func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 		}
 		if outErr != nil {
 			http.Error(w, "Error", 500)
-			log.Printf("Error: %v", err)
+			log.Printf("Error: %v", outErr)
 			return
 		}
 

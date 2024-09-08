@@ -13,7 +13,7 @@ import (
 	"unsafe"
 )
 
-var currentEvents []RocList[byte] // This has to be global as long as effects don't get a hidden argument.
+var currentEvents [][]byte // This has to be global as long as effects don't get a hidden argument.
 
 // Roc holds the connection to roc.
 type Roc struct {
@@ -23,11 +23,10 @@ type Roc struct {
 
 // New initializes the connection to roc.
 func New(eventReader io.Reader) (*Roc, error) {
-
 	var events []RocList[byte]
 	for {
-		// TODO: maybe write event len as string for easier reading of the file
-		var byteLen int64
+		// TODO: maybe write event len as string for easier reading of the fil.
+		var byteLen uint64
 		if err := binary.Read(eventReader, binary.LittleEndian, &byteLen); err != nil {
 			if err == io.EOF {
 				break
@@ -59,7 +58,11 @@ func New(eventReader io.Reader) (*Roc, error) {
 
 //export roc_fx_saveEvent
 func roc_fx_saveEvent(event *C.struct_RocList) RocResultVoidString {
-	currentEvents = append(currentEvents, RocList[byte](*event))
+	// TODO: Do I have to deref the value? Should I make a copy?
+	buf := make([]byte, event.len)
+	copy(buf, RocList[byte](*event).List())
+
+	currentEvents = append(currentEvents, buf)
 	return RocResultVoidString{
 		disciminant: 1,
 	}
@@ -149,26 +152,33 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	}
 	setRefCountToInfinity(unsafe.Pointer(&rocRequest.body.bytes))
 
-	currentEvents = []RocList[byte]{}
+	currentEvents = [][]byte{}
 	response := rocCallRespond(rocRequest, &r.model).result()
 	defer response.DecRef()
 
-	var events = NewRocList(currentEvents)
-	var existingModel = MaybeModelExisting(r.model)
-
-	newModel, failMsg, success := rocCallUpdateModel(events, existingModel).result()
-	if !success {
-		return Response{}, fmt.Errorf("got invalid model: %s", failMsg)
-	}
-
-	for _, event := range currentEvents {
-		binary.Write(db, binary.LittleEndian, event.len)
-		if _, err := db.Write(event.List()); err != nil {
-			return Response{}, fmt.Errorf("saving event: %w", err)
+	if len(currentEvents) > 0 {
+		eventSlice := make([]RocList[byte], len(currentEvents))
+		for i, event := range currentEvents {
+			eventSlice[i] = NewRocList(event)
 		}
-	}
 
-	r.model = newModel
+		var events = NewRocList(eventSlice)
+		var existingModel = MaybeModelExisting(r.model)
+
+		newModel, failMsg, success := rocCallUpdateModel(events, existingModel).result()
+		if !success {
+			return Response{}, fmt.Errorf("got invalid model: %s", failMsg)
+		}
+
+		for _, event := range currentEvents {
+			binary.Write(db, binary.LittleEndian, uint64(len(event)))
+			if _, err := db.Write(event); err != nil {
+				return Response{}, fmt.Errorf("saving event: %w", err)
+			}
+		}
+
+		r.model = newModel
+	}
 
 	return Response{
 		Status:  int(response.status),
