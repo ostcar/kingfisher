@@ -9,7 +9,7 @@ import (
 	"unsafe"
 )
 
-func rocCallUpdateModel(events RocList[RocStr], model MaybeModel) ResultModel {
+func rocCallUpdateModel(events RocList[RocList[byte]], model MaybeModel) ResultModel {
 	var result ResultModel
 	C.roc__mainForHost_2_caller(events.CPtr(), model.CPtr(), nil, result.CPtr())
 	return result

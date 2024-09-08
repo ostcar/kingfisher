@@ -11,7 +11,7 @@ module [
 import PlatformTasks
 
 # TODO: Event has to be (List U8). Also make sure on the host, that newline is allowed
-Event : Str
+Event : List U8
 SaveEvent : Event -> Task {} Str
 
 RequestMethod : [

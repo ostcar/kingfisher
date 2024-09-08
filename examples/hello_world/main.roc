@@ -12,10 +12,11 @@ server = {
 updateModel = \eventList, _initOrModel ->
     List.walk
         eventList
-        "World"
+        (Ok "World")
         \_, event ->
             event
-    |> Ok
+            |> Str.fromUtf8
+            |> Result.mapErr \_ -> "invalid event"
 
 respond = \request, model ->
     when request.method is
@@ -34,7 +35,7 @@ respond = \request, model ->
                     request.body
                     |> Str.fromUtf8
                     |> Result.withDefault "invalid body"
-            saveEvent newModel
+            saveEvent (newModel |> Str.toUtf8)
                 |> Task.mapErr! \_ -> ServerErr "Can not save event"
             Task.ok! {
                 body: newModel |> Str.toUtf8,

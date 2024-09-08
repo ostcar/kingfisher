@@ -36,7 +36,7 @@ import InternalTcp
 import InternalCommand
 import InternalError
 
-saveEvent : Str -> Task {} Str
+saveEvent : List U8 -> Task {} Str
 
 # Stdout
 stdoutLine : Str -> Task {} Str

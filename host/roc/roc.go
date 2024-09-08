@@ -3,7 +3,7 @@ package roc
 import "C"
 
 import (
-	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +13,7 @@ import (
 	"unsafe"
 )
 
-var currentEvents []RocStr // This has to be global as long as effects don't get a hidden argument.
+var currentEvents []RocList[byte] // This has to be global as long as effects don't get a hidden argument.
 
 // Roc holds the connection to roc.
 type Roc struct {
@@ -23,19 +23,24 @@ type Roc struct {
 
 // New initializes the connection to roc.
 func New(eventReader io.Reader) (*Roc, error) {
-	buf := bufio.NewReader(eventReader)
 
-	var events []RocStr
+	var events []RocList[byte]
 	for {
-		str, err := buf.ReadString('\n')
-		if err != nil {
+		// TODO: maybe write event len as string for easier reading of the file
+		var byteLen int64
+		if err := binary.Read(eventReader, binary.LittleEndian, &byteLen); err != nil {
 			if err == io.EOF {
 				break
 			}
-			return nil, fmt.Errorf("reading from eventReader: %w", err)
+			return nil, fmt.Errorf("read byte len from event reader: %w", err)
 		}
 
-		events = append(events, NewRocStr(str[0:len(str)-1]))
+		buf := make([]byte, byteLen)
+		if _, err := io.ReadFull(eventReader, buf); err != nil {
+			return nil, fmt.Errorf("reading event from reader: %w", err)
+		}
+
+		events = append(events, NewRocList(buf))
 	}
 
 	rocEvents := NewRocList(events)
@@ -53,8 +58,8 @@ func New(eventReader io.Reader) (*Roc, error) {
 }
 
 //export roc_fx_saveEvent
-func roc_fx_saveEvent(event *RocStr) RocResultVoidString {
-	currentEvents = append(currentEvents, *event)
+func roc_fx_saveEvent(event *C.struct_RocList) RocResultVoidString {
+	currentEvents = append(currentEvents, RocList[byte](*event))
 	return RocResultVoidString{
 		disciminant: 1,
 	}
@@ -144,7 +149,7 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	}
 	setRefCountToInfinity(unsafe.Pointer(&rocRequest.body.bytes))
 
-	currentEvents = []RocStr{}
+	currentEvents = []RocList[byte]{}
 	response := rocCallRespond(rocRequest, &r.model).result()
 	defer response.DecRef()
 
@@ -157,7 +162,10 @@ func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
 	}
 
 	for _, event := range currentEvents {
-		fmt.Fprintln(db, event.String())
+		binary.Write(db, binary.LittleEndian, event.len)
+		if _, err := db.Write(event.List()); err != nil {
+			return Response{}, fmt.Errorf("saving event: %w", err)
+		}
 	}
 
 	r.model = newModel
