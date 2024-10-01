@@ -3,7 +3,7 @@
 Kingfisher is a webserver platform for the [Roc
 language](https://www.roc-lang.org/).
 
-It lets you build websites by defining your own Model. The model is hold in
+It lets you build websites by defining your own Model. The model is held in
 memory and saved on disk.
 
 Kingfisher follows a very minimalistic approach. You do not have to deal with
