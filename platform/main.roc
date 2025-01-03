@@ -1,39 +1,27 @@
 platform "webserver"
-    requires { Model } { main : _ }
+    requires { Model } {
+        handle_events : [Init, Existing Model], List (List U8) -> Result Model _,
+        handle_request! : Request, Model => Result Response _,
+    }
     exposes []
     packages {}
-    imports [Webserver.{ Request, Response }]
-    provides [mainForHost]
+    imports [Http.{ Request, Response, RequestFromHost, request_from_host }]
+    provides [handle_events_for_host, handle_request_for_host!]
 
-ProgramForHost : {
-    decodeModel : [Init, Existing (List U8)] -> Result (Box Model) Str,
-    encodeModel : Box Model -> List U8,
-    handleReadRequest : Request, Box Model -> Response,
-    handleWriteRequest : Request, Box Model -> (Response, Box Model),
-}
+handle_events_for_host : [Init, Existing (Box Model)], List (List U8) -> Result (Box Model) Str
+handle_events_for_host = \may_boxed_model, event_list ->
+    may_model =
+        when may_boxed_model is
+            Init -> Init
+            Existing boxed_model -> boxed_model |> Box.unbox |> Existing
 
-mainForHost : ProgramForHost
-mainForHost = {
-    decodeModel,
-    encodeModel,
-    handleReadRequest,
-    handleWriteRequest,
-}
+    handle_events may_model event_list
+    |> Result.map \model -> model |> Box.box
+    |> Result.mapErr Inspect.toStr
 
-decodeModel : [Init, Existing (List U8)] -> Result (Box Model) Str
-decodeModel = \fromHost ->
-    main.decodeModel fromHost
-    |> Result.map \model -> Box.box model
-
-encodeModel : Box Model -> List U8
-encodeModel = \boxedModel ->
-    main.encodeModel (Box.unbox boxedModel)
-
-handleReadRequest : Request, Box Model -> Response
-handleReadRequest = \request, boxedModel ->
-    main.handleReadRequest request (Box.unbox boxedModel)
-
-handleWriteRequest : Request, Box Model -> (Response, Box Model)
-handleWriteRequest = \request, boxedModel ->
-    (resp, newModel) = main.handleWriteRequest request (Box.unbox boxedModel)
-    (resp, newModel |> Box.box)
+handle_request_for_host! : RequestFromHost, Box Model => Result Response Str
+handle_request_for_host! = \host_request, boxed_model ->
+    boxed_model
+    |> Box.unbox
+    |> \model -> handle_request! (request_from_host host_request) model
+    |> Result.mapErr Inspect.toStr
