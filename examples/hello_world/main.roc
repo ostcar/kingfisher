@@ -1,4 +1,4 @@
-app [handle_events, handle_request!, Model] {
+app [init_model, handle_events, handle_request!, Model] {
     webserver: platform "../../platform/main.roc",
 }
 
@@ -6,15 +6,12 @@ import webserver.Http
 
 Model : Str
 
-handle_events : [Init, Existing Model], List (List U8) -> Result Model _
-handle_events = \may_model, event_list ->
-    init_model =
-        when may_model is
-            Init -> "World"
-            Existing existing_model -> existing_model
+init_model = "World"
 
+handle_events : Model, List (List U8) -> Result Model _
+handle_events = \model, event_list ->
     event_list
-    |> List.walkTry init_model \_, event ->
+    |> List.walkTry model \_acc_model, event ->
         event
         |> Str.fromUtf8
         |> Result.mapErr \_ -> InvalidEvent
@@ -41,7 +38,7 @@ handle_request! = \request, model ->
 
             save_event! event
 
-            new_model = handle_events? (Existing model) [event]
+            new_model = handle_events? model [event]
             Ok {
                 body: new_model |> Str.toUtf8,
                 headers: [],
