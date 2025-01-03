@@ -2,17 +2,15 @@ module [
     Request,
     Response,
     Header,
-    Event,
     requestFromHost,
     HostRequest,
     RequestMethod,
 ]
 
 import PlatformTasks
+import json.Json
 
-# TODO: Event has to be (List U8). Also make sure on the host, that newline is allowed
-Event : List U8
-SaveEvent : Event -> Task {} Str
+SaveEvent : Str, val -> Task {} Str where val implements Encoding
 
 RequestMethod : [
     Options,
@@ -63,6 +61,15 @@ HostRequest : {
     body : List U8,
     timeout : [TimeoutMilliseconds U64, NoTimeout],
 }
+
+saveEvent : SaveEvent
+saveEvent = \type, payload ->
+    {
+        type: type,
+        payload: payload,
+    }
+    |> Encode.toBytes Json.utf8
+    |> PlatformTasks.saveEvent
 
 requestFromHost : HostRequest -> Request
 requestFromHost = \fromHost ->

@@ -4,14 +4,24 @@ platform "webserver"
         respond : Request, Model -> Task Response _,
     } }
     exposes []
-    packages {}
-    imports [Webserver.{ Request, Response, Event }, Stderr]
+    packages {
+        json: "https://github.com/lukewilliamboswell/roc-json/releases/download/0.10.2/FH4N0Sw-JSFXJfG3j54VEDPtXOoN-6I9v_IA8S18IGk.tar.br",
+    }
+    imports [Webserver.{ Request, Response }, Stderr, json.Json, Utc]
     provides [mainForHost]
 
 ServerForHost : {
-    updateModel : List Event, [Init, Existing (Box Model)] -> Result (Box Model) Str,
+    updateModel : List FromHostEvent, [Init, Existing (Box Model)] -> Result (Box Model) Str,
     respond : Webserver.HostRequest, Box Model -> Task Response [],
 }
+
+FromHostEvent : {
+    type : Str,
+    timestamp : I64,
+    payload : List U8,
+}
+
+Event : (Str, val) where val implements Decoding
 
 mainForHost : ServerForHost
 mainForHost = {
@@ -19,14 +29,24 @@ mainForHost = {
     respond,
 }
 
-updateModel : List Event, [Init, Existing (Box Model)] -> Result (Box Model) Str
-updateModel = \eventList, maybeBoxedModel ->
+EventTypes : [Str]
+
+updateModel : List FromHostEvent, [Init, Existing (Box Model)] -> Result (Box Model) Str
+updateModel = \hostEventList, maybeBoxedModel ->
     maybeModel =
         when maybeBoxedModel is
             Init -> Init
             Existing boxedModel -> Existing (Box.unbox boxedModel)
 
-    server.updateModel eventList maybeModel
+    hostEventList
+    |> List.map \hostEvent ->
+        utc = hostEvent.timestamp |> Num.toI128 |> Utf.fromMillisSinceEpoch
+        {
+            type: outer.type,
+            timestamp: utc,
+            payload: outer.payload,
+        }
+    |> Result.try \eventList -> server.updateModel eventList maybeModel
     |> Result.map Box.box
 
 respond : Webserver.HostRequest, Box Model -> Task Response []
