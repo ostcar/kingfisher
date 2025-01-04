@@ -4,6 +4,7 @@ module [
     Header,
     RequestFromHost,
     request_from_host,
+    method_name,
 ]
 
 import Host
@@ -29,7 +30,6 @@ Request : {
     headers : List Header,
     url : Str,
     body : List U8,
-    timeout : [TimeoutMilliseconds U64, NoTimeout],
 }
 
 Response : {
@@ -55,8 +55,20 @@ RequestFromHost : {
     headers : List Header,
     url : Str,
     body : List U8,
-    timeout : [TimeoutMilliseconds U64, NoTimeout],
 }
+
+method_name : RequestMethod -> Str
+method_name = \method ->
+    when method is
+        Options -> "Options"
+        Get -> "Get"
+        Post _ -> "Post"
+        Put _ -> "Put"
+        Delete _ -> "Delete"
+        Head -> "Head"
+        Trace -> "Trace"
+        Connect -> "Connect"
+        Patch _ -> "Patch"
 
 request_from_host : RequestFromHost -> Request
 request_from_host = \from_host ->
@@ -75,6 +87,5 @@ request_from_host = \from_host ->
         headers: from_host.headers,
         url: from_host.url,
         body: from_host.body,
-        timeout: from_host.timeout,
         method: method,
     }

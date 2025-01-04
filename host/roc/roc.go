@@ -3,13 +3,11 @@ package roc
 import "C"
 
 import (
-	"encoding/json"
-	"errors"
+	"bytes"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
-	"net/textproto"
-	"strings"
 	"sync"
 	"unsafe"
 )
@@ -22,162 +20,135 @@ type Roc struct {
 }
 
 // New initializes the connection to roc.
-func New(encodedModel []byte, reader io.Reader) (*Roc, error) {
-	decodeArg := decodeArgInit()
-	if encodedModel != nil {
-		decodeArg = decodeArgExisting(NewRocList(encodedModel))
-	}
-	mayModel := rocCallDecodeModel(decodeArg)
+func New(eventReader iter.Seq2[[]byte, error]) (*Roc, error) {
+	initModel := rocCallInitModel()
 
-	var model unsafe.Pointer
-	model, errStr, ok := mayModel.result()
-	if !ok {
-		return nil, fmt.Errorf("decoding model: Roc returned: %s", errStr)
+	var events []RocList[byte]
+	for event, err := range eventReader {
+		if err != nil {
+			return nil, fmt.Errorf("can not read event: %w", err)
+		}
+
+		events = append(events, NewRocList(event))
 	}
+
+	rocEvents := NewRocList(events)
+
+	model, err, success := rocCallUpdateModel(initModel, rocEvents).result()
+	if !success {
+		return nil, fmt.Errorf("can not run events: %v", err)
+	}
+
+	setRefCountToInfinity(model)
 
 	r := Roc{model: model}
-
-	decoder := json.NewDecoder(reader)
-	for {
-		var request Request
-		if err := decoder.Decode(&request); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("decoding data: %w", err)
-		}
-
-		responseModel, err := r.runWriteRequest(request)
-		if err != nil {
-			return nil, fmt.Errorf("rerun request: %w", err)
-		}
-		RocResponse(responseModel.response).DecRef()
-		r.model = unsafe.Pointer(responseModel.model)
-	}
-
-	setRefCountToInfinity(r.model)
 
 	return &r, nil
 }
 
-// DumpModel returns a []byte reprsentation of the model.
-func (r *Roc) DumpModel() []byte {
-	return rocCallEncodeModel(&r.model).List()
-}
-
-// Request represents an http request
-type Request struct {
-	Body    []byte              `json:"body"`
-	Method  string              `json:"method"`
-	Header  map[string][]string `json:"headers"`
-	URL     string              `json:"url"`
-	Timeout uint64              `json:"timeout"`
-}
-
-// Header represents one http header.
-type Header struct {
-	Name  string
-	Value string
-}
-
-// Response represents a http response.
-type Response struct {
-	Status  int
-	Headers []Header
-	Body    string
-}
-
-// RequestFromHTTP creates a Request object from an http.Request.
-func RequestFromHTTP(r *http.Request) (Request, error) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return Request{}, fmt.Errorf("read request body: %w", err)
+func (r *Roc) HanldeRequest(w http.ResponseWriter, req *http.Request, eventWriter func(event ...[]byte) error) error {
+	if isWriteRequest(req.Method) {
+		return r.handleWriteRequest(w, req, eventWriter)
 	}
 
-	return Request{
-		Body:    body,
-		Method:  r.Method,
-		Header:  r.Header,
-		URL:     r.URL.String(),
-		Timeout: 0, // What is a request timeout?
-	}, nil
+	return r.handleReadRequest(w, req)
 }
 
-func (r Request) getHeader(key string) string {
-	return textproto.MIMEHeader(r.Header).Get(key)
-}
-
-// ReadRequest handles a read request.
-func (r *Roc) ReadRequest(request Request) (Response, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	rocRequest, err := convertRequest(request)
-	if err != nil {
-		return Response{}, fmt.Errorf("convert request: %w", err)
+func isWriteRequest(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
 	}
-
-	response := rocCallHandleReadRequest(rocRequest, &r.model)
-	defer response.DecRef()
-
-	return Response{
-		Status:  int(response.status),
-		Headers: toGoHeaders(response.Headers()),
-		Body:    strings.Clone(RocStr(response.body).String()),
-	}, nil
 }
 
-// WriteRequest handles a write request.
-func (r *Roc) WriteRequest(request Request, db io.Writer) (Response, error) {
+func (r *Roc) handleWriteRequest(w http.ResponseWriter, req *http.Request, eventWriter func(event ...[]byte) error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	responseModel, err := r.runWriteRequest(request)
+	rocRequest, err := convertRequest(req)
 	if err != nil {
-		return Response{}, err
+		return fmt.Errorf("convert request: %w", err)
 	}
 
-	if err := json.NewEncoder(db).Encode(request); err != nil {
-		return Response{}, fmt.Errorf("encode request: %w", err)
+	currentEvents = [][]byte{}
+	response, rocErr, success := rocCallHandleRequest(rocRequest, r.model).result()
+
+	if !success {
+		return fmt.Errorf("handle request returned %v", rocErr)
+	}
+	defer response.DecRef()
+
+	if len(currentEvents) > 0 {
+		eventSlice := make([]RocList[byte], len(currentEvents))
+		for i, event := range currentEvents {
+			eventSlice[i] = NewRocList(event)
+		}
+
+		var events = NewRocList(eventSlice)
+
+		newModel, failMsg, success := rocCallUpdateModel(r.model, events).result()
+		if !success {
+			return fmt.Errorf("update model: %s", failMsg)
+		}
+
+		setRefCountToInfinity(newModel)
+
+		if err := eventWriter(currentEvents...); err != nil {
+			return fmt.Errorf("save event: %w", err)
+		}
+
+		r.model = newModel
 	}
 
-	response := Response{
-		Status:  int(responseModel.response.status),
-		Headers: toGoHeaders(responseModel.Response().Headers()),
-		Body:    strings.Clone(RocStr(responseModel.response.body).String()),
-	}
-	defer RocResponse(responseModel.response).DecRef()
+	writeResponse(w, response)
 
-	r.model = unsafe.Pointer(responseModel.model)
-	setRefCountToInfinity(r.model)
-
-	return response, nil
+	return nil
 }
 
-func (r *Roc) runWriteRequest(request Request) (RocResponseModel, error) {
-	rocRequest, err := convertRequest(request)
+func (r *Roc) handleReadRequest(w http.ResponseWriter, req *http.Request) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	rocRequest, err := convertRequest(req)
 	if err != nil {
-		return RocResponseModel{}, fmt.Errorf("convert request: %w", err)
+		return fmt.Errorf("convert request: %w", err)
 	}
 
-	setRefCountToOne(r.model)
-	return rocCallWriteReadRequest(rocRequest, &r.model), nil
+	response, rocErr, success := rocCallHandleRequest(rocRequest, r.model).result()
+
+	if !success {
+		return fmt.Errorf("handle request returned %v", rocErr)
+	}
+
+	defer response.DecRef()
+
+	writeResponse(w, response)
+
+	return nil
 }
 
-func convertRequest(r Request) (RocRequest, error) {
-	contentType := r.getHeader("Content-type")
-	if contentType == "" {
-		contentType = "text/plain"
+func writeResponse(w http.ResponseWriter, r RocResponse) {
+	for _, header := range r.Headers().List() {
+		w.Header().Add(RocStr(header.name).String(), RocStr(header.value).String())
+	}
+
+	w.WriteHeader(int(r.status))
+	w.Write(bytes.Clone((RocList[byte](r.body).List())))
+}
+
+func convertRequest(r *http.Request) (RocRequest, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return RocRequest{}, fmt.Errorf("read request body: %w", err)
 	}
 
 	var rocRequest RocRequest
-	rocRequest.body = NewRocList(r.Body).C()
-	rocRequest.mimeType = NewRocStr(contentType).C()
+	rocRequest.body = NewRocList(body).C()
 	rocRequest.methodEnum = C.uchar(convertMethod(r.Method))
 	rocRequest.headers = toRocHeader(r.Header).C()
-	rocRequest.url = NewRocStr(r.URL).C()
-	// TODO: What is a request timeout?
-	rocRequest.timeout = requestTimeoutNoTimeout().C()
+	rocRequest.url = NewRocStr(r.URL.String()).C()
 	return rocRequest, nil
 }
 
@@ -186,25 +157,11 @@ func toRocHeader(goHeader map[string][]string) RocList[RocHeader] {
 	headers := make([]RocHeader, 0, len(goHeader))
 	for name, valueList := range goHeader {
 		for _, value := range valueList {
-			headers = append(headers, RocHeader{name: NewRocStr(name).C(), value: NewRocList([]byte(value)).C()})
+			headers = append(headers, RocHeader{name: NewRocStr(name).C(), value: NewRocStr(value).C()})
 		}
 	}
 
 	return NewRocList(headers)
-}
-
-func toGoHeaders(rocHeaders RocList[RocHeader]) []Header {
-	headerList := rocHeaders.List()
-
-	goHeader := make([]Header, len(headerList))
-	for i, header := range headerList {
-		goHeader[i] = Header{
-			Name:  strings.Clone(RocStr(header.name).String()),
-			Value: strings.Clone(string(RocList[byte](header.value).List())),
-		}
-	}
-
-	return goHeader
 }
 
 func convertMethod(method string) byte {
@@ -231,3 +188,23 @@ func convertMethod(method string) byte {
 		panic("invalid method")
 	}
 }
+
+var currentEvents [][]byte // This has to be global as long as effects don't get a hidden argument.
+
+//export roc_fx_save_event
+func roc_fx_save_event(event *C.struct_RocList) {
+	// TODO: Do I have to deref the value? Should I make a copy?
+	buf := make([]byte, event.len)
+	copy(buf, RocList[byte](*event).List())
+
+	currentEvents = append(currentEvents, buf)
+}
+
+// //export roc_fx_stderrLine
+// func roc_fx_stderrLine(msg *RocStr) RocResultVoidString {
+// 	// TODO: use stderr
+// 	fmt.Println(*msg)
+// 	return RocResultVoidString{
+// 		disciminant: 1,
+// 	}
+// }

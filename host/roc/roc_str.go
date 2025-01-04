@@ -1,5 +1,8 @@
 package roc
 
+/*
+#include "./roc_std.h"
+*/
 import "C"
 import (
 	"unsafe"
@@ -47,6 +50,10 @@ func (r RocStr) String() string {
 
 func (r RocStr) C() C.struct_RocStr {
 	return C.struct_RocStr(r)
+}
+
+func (r *RocStr) CPtr() *C.struct_RocStr {
+	return (*C.struct_RocStr)(r)
 }
 
 func (r RocStr) DecRef() {

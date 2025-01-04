@@ -1,6 +1,8 @@
 package database
 
 import (
+	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -8,83 +10,90 @@ import (
 	"strings"
 )
 
+type EventType int
+
+const (
+	EventTypeLine = iota
+	EventTypeBinary
+	EventTypeText
+)
+
 // Database has the ability to read all data or append new.
 type Database interface {
-	SnapshotRead() ([]byte, error)
-	SnapshotWrite([]byte) error
-	RequestsReader() (io.ReadCloser, error)
-	RequestsWriter() (io.WriteCloser, error)
+	EventsReader() (func(yield func([]byte, error) bool), error)
+	EventsWriter(event ...[]byte) error
 }
 
 // FileDB is a evet database based of one file.
 type FileDB struct {
-	RequestsFile string
-	SnapshotFile string
+	EventType  EventType
+	EventsFile string
 }
 
-// SnapshotRead reads the snapshot file.
-//
-// Returns nil, if the snapshot file does not exist.
-func (db FileDB) SnapshotRead() ([]byte, error) {
-	snaptop, err := os.ReadFile(db.SnapshotFile)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("reading snapshot: %w", err)
-	}
-	return snaptop, nil
-}
-
-// SnapshotWrite writes the snapshot to the file.
-//
-// Also clears the requests file.
-func (db FileDB) SnapshotWrite(snapshot []byte) error {
-	// TODO: Do not replace the file
-	f, err := os.Create(db.SnapshotFile)
-	if err != nil {
-		return fmt.Errorf("creating snapshot file: %w", err)
-	}
-
-	if _, err := f.Write(snapshot); err != nil {
-		return fmt.Errorf("writing snapshot: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("closing snaphot file: %w", err)
-	}
-
-	if err := os.Remove(db.RequestsFile); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("removing requests file: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// RequestsReader returns a reader to read the loged requests from.
-func (db FileDB) RequestsReader() (io.ReadCloser, error) {
-	f, err := os.Open(db.RequestsFile)
+// EventsReader returns a reader to read the loged events from.
+func (db FileDB) EventsReader() (func(yield func([]byte, error) bool), error) {
+	f, err := os.Open(db.EventsFile)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("open database file: %w", err)
+			return nil, fmt.Errorf("open events file: %w", err)
 		}
-		return io.NopCloser(strings.NewReader("")), nil
-
+		return func(yield func([]byte, error) bool) {}, nil
 	}
-	return f, nil
+
+	switch db.EventType {
+	case EventTypeLine:
+		reader := bufio.NewReader(f)
+		return func(yield func([]byte, error) bool) {
+			for {
+				line, err := reader.ReadBytes('\n')
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if !yield(line, err) {
+					break
+				}
+			}
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown eventtype %d", db.EventType)
+	}
+
 }
 
-// RequestsWriter returns a writer to store requests.
-func (db FileDB) RequestsWriter() (io.WriteCloser, error) {
-	f, err := os.OpenFile(db.RequestsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0o600)
+// EventsWriter returns a writer to store events.
+func (db FileDB) EventsWriter(event ...[]byte) error {
+	f, err := os.OpenFile(db.EventsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("open database file: %w", err)
+		return fmt.Errorf("open events file: %w", err)
 	}
+	defer f.Close()
 
-	return f, nil
+	switch db.EventType {
+	case EventTypeLine:
+		// TODO: check, that event does not contain a newline
+		for _, e := range event {
+			if _, err := f.Write(e); err != nil {
+				return fmt.Errorf("saving event: %w", err)
+			}
+			if _, err := f.Write([]byte("\n")); err != nil {
+				return fmt.Errorf("saving newline: %w", err)
+			}
+		}
+		return nil
+
+	case EventTypeBinary:
+		for _, e := range event {
+			binary.Write(f, binary.LittleEndian, uint64(len(e)))
+			if _, err := f.Write(e); err != nil {
+				return fmt.Errorf("saving event: %w", err)
+			}
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unknown eventtype %d", db.EventType)
+	}
 }
 
 // MemoryDB stores the data in memory.

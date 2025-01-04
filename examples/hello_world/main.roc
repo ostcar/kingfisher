@@ -1,4 +1,4 @@
-app [init_model, handle_events, handle_request!, Model] {
+app [init_model, update_model, handle_request!, Model] {
     webserver: platform "../../platform/main.roc",
 }
 
@@ -8,8 +8,8 @@ Model : Str
 
 init_model = "World"
 
-handle_events : Model, List (List U8) -> Result Model _
-handle_events = \model, event_list ->
+update_model : Model, List (List U8) -> Result Model _
+update_model = \model, event_list ->
     event_list
     |> List.walkTry model \_acc_model, event ->
         event
@@ -38,7 +38,7 @@ handle_request! = \request, model ->
 
             save_event! event
 
-            new_model = handle_events? model [event]
+            new_model = update_model? model [event]
             Ok {
                 body: new_model |> Str.toUtf8,
                 headers: [],
@@ -46,4 +46,4 @@ handle_request! = \request, model ->
             }
 
         _ ->
-            Err MethodNotAllowed
+            Err (MethodNotAllowed (Http.method_name request.method))

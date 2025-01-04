@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -15,10 +14,8 @@ import (
 )
 
 type cliConfig struct {
-	Addr         string `help:"Address to listen on." default:":8090"`
-	SnapshotFile string `help:"Path to the snapshot file." default:"db.snapshot" type:"path"`
-	RequestsFile string `help:"Path to the requests file." default:"db.requests" type:"path"`
-	NoSnapshot   bool   `help:"Disable snapshoting."`
+	Addr       string `help:"Address to listen on." default:":9000"`
+	EventsFile string `help:"Path to the events file." default:"db.events" type:"path"`
 }
 
 func entry() {
@@ -37,31 +34,18 @@ func run(cli cliConfig) (err error) {
 	defer cancel()
 
 	db := database.FileDB{
-		RequestsFile: cli.RequestsFile,
-		SnapshotFile: cli.SnapshotFile,
+		EventsFile: cli.EventsFile,
+		EventType:  database.EventTypeLine, // TODO: Only support one for the moment
 	}
 
-	reader, err := db.RequestsReader()
+	reader, err := db.EventsReader()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
 
-	initSnapshot, err := db.SnapshotRead()
-	if err != nil {
-		return fmt.Errorf("reading snapshot: %w", err)
-	}
-
-	r, err := roc.New(initSnapshot, reader)
+	r, err := roc.New(reader)
 	if err != nil {
 		return fmt.Errorf("initial roc app: %w", err)
-	}
-
-	if !cli.NoSnapshot {
-		defer func() {
-			if sErr := db.SnapshotWrite(r.DumpModel()); sErr != nil {
-				err = errors.Join(err, fmt.Errorf("saving model snapshot: %w", sErr))
-			}
-		}()
 	}
 
 	return http.Run(ctx, cli.Addr, r, db)
