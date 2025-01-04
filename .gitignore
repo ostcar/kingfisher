@@ -9,6 +9,7 @@ platform/*.a
 platform/*.h
 platform/*.obj
 platform/*tar.br
+platform/*tar.gz
 
 examples/hello_world/main
 build
