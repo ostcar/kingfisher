@@ -10,14 +10,6 @@ import (
 	"strings"
 )
 
-type EventType int
-
-const (
-	EventTypeLine = iota
-	EventTypeBinary
-	EventTypeText
-)
-
 // Database has the ability to read all data or append new.
 type Database interface {
 	EventsReader() (func(yield func([]byte, error) bool), error)
@@ -26,7 +18,6 @@ type Database interface {
 
 // FileDB is a evet database based of one file.
 type FileDB struct {
-	EventType  EventType
 	EventsFile string
 }
 
@@ -40,60 +31,46 @@ func (db FileDB) EventsReader() (func(yield func([]byte, error) bool), error) {
 		return func(yield func([]byte, error) bool) {}, nil
 	}
 
-	switch db.EventType {
-	case EventTypeLine:
-		reader := bufio.NewReader(f)
-		return func(yield func([]byte, error) bool) {
-			for {
-				line, err := reader.ReadBytes('\n')
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				if !yield(line, err) {
+	reader := bufio.NewReader(f)
+
+	return func(yield func([]byte, error) bool) {
+		defer f.Close()
+		for {
+			size, err := binary.ReadUvarint(reader)
+			if err != nil {
+				if errors.Is(err, io.EOF) || !yield(nil, err) {
 					break
 				}
 			}
-		}, nil
 
-	default:
-		return nil, fmt.Errorf("unknown eventtype %d", db.EventType)
-	}
-
+			buf := make([]byte, size)
+			_, err = io.ReadFull(reader, buf)
+			if !yield(buf, err) {
+				break
+			}
+		}
+	}, nil
 }
 
 // EventsWriter returns a writer to store events.
-func (db FileDB) EventsWriter(event ...[]byte) error {
+func (db FileDB) EventsWriter(eventList ...[]byte) error {
 	f, err := os.OpenFile(db.EventsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("open events file: %w", err)
 	}
 	defer f.Close()
 
-	switch db.EventType {
-	case EventTypeLine:
-		// TODO: check, that event does not contain a newline
-		for _, e := range event {
-			if _, err := f.Write(e); err != nil {
-				return fmt.Errorf("saving event: %w", err)
-			}
-			if _, err := f.Write([]byte("\n")); err != nil {
-				return fmt.Errorf("saving newline: %w", err)
-			}
+	for _, event := range eventList {
+		buf := make([]byte, len(event)+8)
+		written := binary.PutUvarint(buf, uint64(len(event)))
+		copy(buf[written:], event)
+		buf = buf[:written+len(event)]
+		if _, err := f.Write(buf); err != nil {
+			return fmt.Errorf("saving event: %w", err)
 		}
-		return nil
-
-	case EventTypeBinary:
-		for _, e := range event {
-			binary.Write(f, binary.LittleEndian, uint64(len(e)))
-			if _, err := f.Write(e); err != nil {
-				return fmt.Errorf("saving event: %w", err)
-			}
-		}
-		return nil
-
-	default:
-		return fmt.Errorf("unknown eventtype %d", db.EventType)
 	}
+	return nil
+
 }
 
 // MemoryDB stores the data in memory.
