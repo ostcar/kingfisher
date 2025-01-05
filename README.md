@@ -75,6 +75,9 @@ The platform can handle many read requests at the same time. But there can only
 be one concurent write request. When a write request is processed, all other
 write request and all read requests have to wait.
 
+All events are only persisted to disk, if `handle_request!` returns with Ok. On
+error, all events gets discarded.
+
 
 ## Build the platform
 

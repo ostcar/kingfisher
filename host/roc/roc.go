@@ -47,11 +47,25 @@ func New(eventReader iter.Seq2[[]byte, error]) (*Roc, error) {
 }
 
 func (r *Roc) HanldeRequest(w http.ResponseWriter, req *http.Request, eventWriter func(event ...[]byte) error) error {
-	if isWriteRequest(req.Method) {
-		return r.handleWriteRequest(w, req, eventWriter)
+	rocRequest, err := convertRequest(req)
+	if err != nil {
+		return fmt.Errorf("convert request: %w", err)
 	}
 
-	return r.handleReadRequest(w, req)
+	var rocResponse RocResponse
+	if isWriteRequest(req.Method) {
+		rocResponse, err = r.handleWriteRequest(rocRequest, eventWriter)
+	} else {
+		rocResponse, err = r.handleReadRequest(rocRequest)
+	}
+	if err != nil {
+		return fmt.Errorf("handle request returned %v", err)
+	}
+	defer rocResponse.DecRef()
+
+	writeResponse(w, rocResponse)
+
+	return nil
 }
 
 func isWriteRequest(method string) bool {
@@ -63,22 +77,15 @@ func isWriteRequest(method string) bool {
 	}
 }
 
-func (r *Roc) handleWriteRequest(w http.ResponseWriter, req *http.Request, eventWriter func(event ...[]byte) error) error {
+func (r *Roc) handleWriteRequest(rocRequest RocRequest, eventWriter func(event ...[]byte) error) (RocResponse, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	rocRequest, err := convertRequest(req)
-	if err != nil {
-		return fmt.Errorf("convert request: %w", err)
-	}
-
 	currentEvents = [][]byte{}
 	response, rocErr, success := rocCallHandleRequest(rocRequest, r.model).result()
-
 	if !success {
-		return fmt.Errorf("handle request returned %v", rocErr)
+		return RocResponse{}, fmt.Errorf("calling Roc for write: %v", rocErr)
 	}
-	defer response.DecRef()
 
 	if len(currentEvents) > 0 {
 		eventSlice := make([]RocList[byte], len(currentEvents))
@@ -90,43 +97,31 @@ func (r *Roc) handleWriteRequest(w http.ResponseWriter, req *http.Request, event
 
 		newModel, failMsg, success := rocCallUpdateModel(r.model, events).result()
 		if !success {
-			return fmt.Errorf("update model: %s", failMsg)
+			return RocResponse{}, fmt.Errorf("update model: %s", failMsg)
 		}
 
 		setRefCountToInfinity(newModel)
 
 		if err := eventWriter(currentEvents...); err != nil {
-			return fmt.Errorf("save event: %w", err)
+			return RocResponse{}, fmt.Errorf("save event: %w", err)
 		}
 
 		r.model = newModel
 	}
 
-	writeResponse(w, response)
-
-	return nil
+	return response, nil
 }
 
-func (r *Roc) handleReadRequest(w http.ResponseWriter, req *http.Request) error {
+func (r *Roc) handleReadRequest(rocRequest RocRequest) (RocResponse, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	rocRequest, err := convertRequest(req)
-	if err != nil {
-		return fmt.Errorf("convert request: %w", err)
-	}
-
 	response, rocErr, success := rocCallHandleRequest(rocRequest, r.model).result()
-
 	if !success {
-		return fmt.Errorf("handle request returned %v", rocErr)
+		return RocResponse{}, fmt.Errorf("calling Roc for read: %v", rocErr)
 	}
 
-	defer response.DecRef()
-
-	writeResponse(w, response)
-
-	return nil
+	return response, nil
 }
 
 func writeResponse(w http.ResponseWriter, r RocResponse) {
