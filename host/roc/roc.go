@@ -1,5 +1,11 @@
 package roc
 
+/*
+struct Uint128 {
+    unsigned long long lo;
+    unsigned long long hi;
+};
+*/
 import "C"
 
 import (
@@ -9,6 +15,7 @@ import (
 	"iter"
 	"net/http"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -195,11 +202,14 @@ func roc_fx_save_event(event *C.struct_RocList) {
 	currentEvents = append(currentEvents, buf)
 }
 
-// //export roc_fx_stderrLine
-// func roc_fx_stderrLine(msg *RocStr) RocResultVoidString {
-// 	// TODO: use stderr
-// 	fmt.Println(*msg)
-// 	return RocResultVoidString{
-// 		disciminant: 1,
-// 	}
-// }
+//export roc_fx_stdout_line
+func roc_fx_stdout_line(msg *RocStr) {
+	fmt.Println(*msg)
+}
+
+//export roc_fx_posix_time
+func roc_fx_posix_time() C.struct_Uint128 {
+	// This "only" works until the year 2262.
+	milliseconds := time.Now().UnixNano()
+	return C.struct_Uint128{lo: C.ulonglong(milliseconds), hi: 0}
+}

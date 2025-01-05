@@ -46,4 +46,4 @@ handle_request! = \request, model ->
             }
 
         _ ->
-            Err (MethodNotAllowed (Http.method_name request.method))
+            Err (MethodNotAllowed (Http.method_to_str request.method))

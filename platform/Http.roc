@@ -4,7 +4,7 @@ module [
     Header,
     RequestFromHost,
     request_from_host,
-    method_name,
+    method_to_str,
 ]
 
 import Host
@@ -57,8 +57,8 @@ RequestFromHost : {
     body : List U8,
 }
 
-method_name : RequestMethod -> Str
-method_name = \method ->
+method_to_str : RequestMethod -> Str
+method_to_str = \method ->
     when method is
         Options -> "Options"
         Get -> "Get"
