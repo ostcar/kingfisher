@@ -23,6 +23,7 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 	"unsafe"
@@ -234,14 +235,22 @@ func roc_fx_get(url *RocStr) C.struct_ResultBytesString {
 		return getResultError(fmt.Errorf("status code: %d", resp.StatusCode))
 	}
 
-	fmt.Println(resp.StatusCode)
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return getResultError(err)
 	}
 
 	return getResultSuccess(body)
+}
+
+//export roc_fx_file_read_bytes
+func roc_fx_file_read_bytes(path *RocStr) C.struct_ResultBytesString {
+	content, err := os.ReadFile(path.String())
+	if err != nil {
+		return getResultError(err)
+	}
+
+	return getResultSuccess(content)
 }
 
 func getResultError(err error) C.struct_ResultBytesString {
