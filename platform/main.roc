@@ -1,39 +1,39 @@
 platform "webserver"
-    requires { Model } { main : _ }
+    requires { Model } {
+        init_model : Model,
+        update_model : Model, List (List U8) -> Result Model _,
+        handle_request! : Request, Model => Result Response _,
+    }
     exposes []
     packages {}
-    imports [Webserver.{ Request, Response }]
-    provides [mainForHost]
+    imports [Http.{ Request, Response, RequestFromHost, request_from_host }]
+    provides [
+        init_model_for_host,
+        update_model_for_host,
+        handle_request_for_host!,
+    ]
 
-ProgramForHost : {
-    decodeModel : [Init, Existing (List U8)] -> Result (Box Model) Str,
-    encodeModel : Box Model -> List U8,
-    handleReadRequest : Request, Box Model -> Response,
-    handleWriteRequest : Request, Box Model -> (Response, Box Model),
-}
+init_model_for_host : Box Model
+init_model_for_host = init_model |> Box.box
 
-mainForHost : ProgramForHost
-mainForHost = {
-    decodeModel,
-    encodeModel,
-    handleReadRequest,
-    handleWriteRequest,
-}
+update_model_for_host : Box Model, List (List U8) -> Result (Box Model) Str
+update_model_for_host = \boxed_model, event_list ->
+    boxed_model
+    |> Box.unbox
+    |> update_model event_list
+    |> Result.map \model -> model |> Box.box
+    |> errToStr
 
-decodeModel : [Init, Existing (List U8)] -> Result (Box Model) Str
-decodeModel = \fromHost ->
-    main.decodeModel fromHost
-    |> Result.map \model -> Box.box model
+handle_request_for_host! : RequestFromHost, Box Model => Result Response Str
+handle_request_for_host! = \host_request, boxed_model ->
+    boxed_model
+    |> Box.unbox
+    |> \model -> handle_request! (request_from_host host_request) model
+    |> errToStr
 
-encodeModel : Box Model -> List U8
-encodeModel = \boxedModel ->
-    main.encodeModel (Box.unbox boxedModel)
-
-handleReadRequest : Request, Box Model -> Response
-handleReadRequest = \request, boxedModel ->
-    main.handleReadRequest request (Box.unbox boxedModel)
-
-handleWriteRequest : Request, Box Model -> (Response, Box Model)
-handleWriteRequest = \request, boxedModel ->
-    (resp, newModel) = main.handleWriteRequest request (Box.unbox boxedModel)
-    (resp, newModel |> Box.box)
+errToStr : Result a _ -> Result a Str
+errToStr = \r ->
+    when r is
+        Ok v -> Ok v
+        Err ThisLineIsNecessary -> Err (Inspect.toStr ThisLineIsNecessary) # https://github.com/roc-lang/roc/issues/7289
+        Err err -> Err (Inspect.toStr err)

@@ -1,63 +1,49 @@
-app [main, Model] {
+app [init_model, update_model, handle_request!, Model] {
     webserver: platform "../../platform/main.roc",
 }
 
-import webserver.Webserver exposing [Request, Response]
-
-Program : {
-    decodeModel : [Init, Existing (List U8)] -> Result Model Str,
-    encodeModel : Model -> List U8,
-    handleReadRequest : Request, Model -> Response,
-    handleWriteRequest : Request, Model -> (Response, Model),
-}
+import webserver.Http
 
 Model : Str
 
-main : Program
-main = {
-    decodeModel,
-    encodeModel,
-    handleReadRequest,
-    handleWriteRequest,
-}
+init_model = "World"
 
-decodeModel : [Init, Existing (List U8)] -> Result Model Str
-decodeModel = \fromPlatform ->
-    when fromPlatform is
-        Init ->
-            Ok "World"
+update_model : Model, List (List U8) -> Result Model _
+update_model = \model, event_list ->
+    event_list
+    |> List.walkTry model \_acc_model, event ->
+        event
+        |> Str.fromUtf8
+        |> Result.mapErr \_ -> InvalidEvent
 
-        Existing encoded ->
-            encoded
-            |> Str.fromUtf8
-            |> Result.mapErr \_ -> "Error: Can not decode database."
+handle_request! : Http.Request, Model => Result Http.Response _
+handle_request! = \request, model ->
+    when request.method is
+        Get ->
+            Ok {
+                body: "Hello $(model)\n" |> Str.toUtf8,
+                headers: [],
+                status: 200,
+            }
 
-encodeModel : Model -> List U8
-encodeModel = \model ->
-    model |> Str.toUtf8
+        Post save_event! ->
+            event =
+                if List.isEmpty request.body then
+                    "World" |> Str.toUtf8
+                else
+                    when request.body |> Str.fromUtf8 is
+                        Ok _ -> request.body
+                        Err _ ->
+                            return Err InvalidBody
 
-handleReadRequest : Request, Model -> Response
-handleReadRequest = \_request, model -> {
-    body: "Hello $(model)\n" |> Str.toUtf8,
-    headers: [],
-    status: 200,
-}
+            save_event! event
 
-handleWriteRequest : Request, Model -> (Response, Model)
-handleWriteRequest = \request, _model ->
-    newModel =
-        if List.isEmpty request.body then
-            "World"
-        else
-            request.body 
-            |> Str.fromUtf8 
-            |> Result.withDefault "invalid body"
+            new_model = update_model? model [event]
+            Ok {
+                body: new_model |> Str.toUtf8,
+                headers: [],
+                status: 200,
+            }
 
-    (
-        {
-            body: newModel |> Str.toUtf8,
-            headers: [],
-            status: 200,
-        },
-        newModel,
-    )
+        _ ->
+            Err (MethodNotAllowed (Http.method_to_str request.method))

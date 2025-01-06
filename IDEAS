@@ -1,2 +1,0 @@
-* Add an attribute "log : Str" to the Response type, that gets printed by the platform
-* Add some attribute to a write request, to prevent the host from saving this request (for example, if it contains clear text passwords)

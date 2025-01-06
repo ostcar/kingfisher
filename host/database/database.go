@@ -1,6 +1,8 @@
 package database
 
 import (
+	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,81 +12,65 @@ import (
 
 // Database has the ability to read all data or append new.
 type Database interface {
-	SnapshotRead() ([]byte, error)
-	SnapshotWrite([]byte) error
-	RequestsReader() (io.ReadCloser, error)
-	RequestsWriter() (io.WriteCloser, error)
+	EventsReader() (func(yield func([]byte, error) bool), error)
+	EventsWriter(event ...[]byte) error
 }
 
 // FileDB is a evet database based of one file.
 type FileDB struct {
-	RequestsFile string
-	SnapshotFile string
+	EventsFile string
 }
 
-// SnapshotRead reads the snapshot file.
-//
-// Returns nil, if the snapshot file does not exist.
-func (db FileDB) SnapshotRead() ([]byte, error) {
-	snaptop, err := os.ReadFile(db.SnapshotFile)
+// EventsReader returns a reader to read the loged events from.
+func (db FileDB) EventsReader() (func(yield func([]byte, error) bool), error) {
+	f, err := os.Open(db.EventsFile)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-
-		return nil, fmt.Errorf("reading snapshot: %w", err)
-	}
-	return snaptop, nil
-}
-
-// SnapshotWrite writes the snapshot to the file.
-//
-// Also clears the requests file.
-func (db FileDB) SnapshotWrite(snapshot []byte) error {
-	// TODO: Do not replace the file
-	f, err := os.Create(db.SnapshotFile)
-	if err != nil {
-		return fmt.Errorf("creating snapshot file: %w", err)
-	}
-
-	if _, err := f.Write(snapshot); err != nil {
-		return fmt.Errorf("writing snapshot: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("closing snaphot file: %w", err)
-	}
-
-	if err := os.Remove(db.RequestsFile); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("removing requests file: %w", err)
+			return nil, fmt.Errorf("open events file: %w", err)
 		}
+		return func(yield func([]byte, error) bool) {}, nil
 	}
 
+	reader := bufio.NewReader(f)
+
+	return func(yield func([]byte, error) bool) {
+		defer f.Close()
+		for {
+			size, err := binary.ReadUvarint(reader)
+			if err != nil {
+				if errors.Is(err, io.EOF) || !yield(nil, err) {
+					break
+				}
+			}
+
+			buf := make([]byte, size)
+			_, err = io.ReadFull(reader, buf)
+			if !yield(buf, err) {
+				break
+			}
+		}
+	}, nil
+}
+
+// EventsWriter returns a writer to store events.
+func (db FileDB) EventsWriter(eventList ...[]byte) error {
+	f, err := os.OpenFile(db.EventsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("open events file: %w", err)
+	}
+	defer f.Close()
+
+	for _, event := range eventList {
+		buf := make([]byte, len(event)+8)
+		written := binary.PutUvarint(buf, uint64(len(event)))
+		copy(buf[written:], event)
+		buf = buf[:written+len(event)]
+		if _, err := f.Write(buf); err != nil {
+			return fmt.Errorf("saving event: %w", err)
+		}
+	}
 	return nil
-}
 
-// RequestsReader returns a reader to read the loged requests from.
-func (db FileDB) RequestsReader() (io.ReadCloser, error) {
-	f, err := os.Open(db.RequestsFile)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("open database file: %w", err)
-		}
-		return io.NopCloser(strings.NewReader("")), nil
-
-	}
-	return f, nil
-}
-
-// RequestsWriter returns a writer to store requests.
-func (db FileDB) RequestsWriter() (io.WriteCloser, error) {
-	f, err := os.OpenFile(db.RequestsFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("open database file: %w", err)
-	}
-
-	return f, nil
 }
 
 // MemoryDB stores the data in memory.
