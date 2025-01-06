@@ -1,9 +1,18 @@
 package roc
 
 /*
+#include "./roc_std.h"
 struct Uint128 {
     unsigned long long lo;
     unsigned long long hi;
+};
+
+struct ResultBytesString{
+    union {
+        struct RocList bytes;
+        struct RocStr string;
+    } payload;
+    unsigned char disciminant;
 };
 */
 import "C"
@@ -212,4 +221,37 @@ func roc_fx_posix_time() C.struct_Uint128 {
 	// This "only" works until the year 2262.
 	milliseconds := time.Now().UnixNano()
 	return C.struct_Uint128{lo: C.ulonglong(milliseconds), hi: 0}
+}
+
+//export roc_fx_get
+func roc_fx_get(url *RocStr) C.struct_ResultBytesString {
+	resp, err := http.Get(url.String())
+	if err != nil {
+		return getResultError(err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return getResultError(fmt.Errorf("status code: %d", resp.StatusCode))
+	}
+
+	fmt.Println(resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return getResultError(err)
+	}
+
+	return getResultSuccess(body)
+}
+
+func getResultError(err error) C.struct_ResultBytesString {
+	errStr := NewRocStr(err.Error())
+	payload := *(*[24]byte)(unsafe.Pointer(&errStr))
+	return C.struct_ResultBytesString{payload: payload, disciminant: 0}
+}
+
+func getResultSuccess(content []byte) C.struct_ResultBytesString {
+	v := NewRocList(content)
+	payload := *(*[24]byte)(unsafe.Pointer(&v))
+	return C.struct_ResultBytesString{payload: payload, disciminant: 1}
 }
