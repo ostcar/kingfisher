@@ -10,10 +10,10 @@ memory. No need for SQL.Changes to the model are saved to disk in an event store
 ## Current state of the project
 
 The project is in an early stage. I am currently exploring the API. There will
-by many breaking changes. There will probably also be changes, how the data is
-stored on disk, without the posibility to migrate the data.
+be many breaking changes. There will probably also be changes, how the data is
+stored on disk, without the possibility to migrate the data.
 
-Please inform me, if you plan to use this platform, so I can keep your usecase
+Please inform me, if you plan to use this platform, so I can keep your use case
 in mind and consider writing migrations.
 
 
@@ -80,7 +80,7 @@ All other methods are read requests. This means, that a `GET` request can not
 alter the Model.
 
 The platform can handle many read requests at the same time. But there can only
-be one concurent write request. When a write request is processed, all other
+be one concurrent write request. When a write request is processed, all other
 write request and all read requests have to wait.
 
 All events are only persisted to disk, if `handle_request!` returns with Ok. On
