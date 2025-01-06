@@ -11,39 +11,38 @@ init_model = "World"
 update_model : Model, List (List U8) -> Result Model _
 update_model = \model, event_list ->
     event_list
-    |> List.walkTry model \_acc_model, event ->
-        event
-        |> Str.fromUtf8
-        |> Result.mapErr \_ -> InvalidEvent
+    |> List.walkTry(model, \_acc_model, event ->
+        Str.fromUtf8(event)
+        |> Result.mapErr(\_ -> InvalidEvent))
 
 handle_request! : Http.Request, Model => Result Http.Response _
 handle_request! = \request, model ->
     when request.method is
         Get ->
             Ok {
-                body: "Hello $(model)\n" |> Str.toUtf8,
+                body: Str.toUtf8("Hello $(model)\n"),
                 headers: [],
                 status: 200,
             }
 
         Post save_event! ->
             event =
-                if List.isEmpty request.body then
-                    "World" |> Str.toUtf8
+                if List.isEmpty(request.body) then
+                    Str.toUtf8("World")
                 else
-                    when request.body |> Str.fromUtf8 is
+                    when Str.fromUtf8(request.body) is
                         Ok _ -> request.body
                         Err _ ->
-                            return Err InvalidBody
+                            return Err(InvalidBody)
 
-            save_event! event
+            save_event!(event)
 
-            new_model = update_model? model [event]
+            new_model = update_model?(model, [event])
             Ok {
-                body: new_model |> Str.toUtf8,
+                body: Str.toUtf8(new_model),
                 headers: [],
                 status: 200,
             }
 
         _ ->
-            Err (MethodNotAllowed (Http.method_to_str request.method))
+            Err(MethodNotAllowed(Http.method_to_str request.method))
