@@ -60,7 +60,7 @@ when request.method is
         ...
 
     Post save_event! ->
-        save_event! my_event
+        save_event!(my_event)
 ```
 
 An event is a `List U8`. Make sure to implement `update_model` to handle all of
