@@ -62,7 +62,7 @@ func New(eventReader iter.Seq2[[]byte, error]) (*Roc, error) {
 	return &r, nil
 }
 
-func (r *Roc) HanldeRequest(w http.ResponseWriter, req *http.Request, eventWriter func(event ...[]byte) error) error {
+func (r *Roc) HandleRequest(w http.ResponseWriter, req *http.Request, eventWriter func(event ...[]byte) error) error {
 	rocRequest, err := convertRequest(req)
 	if err != nil {
 		return fmt.Errorf("convert request: %w", err)
@@ -75,7 +75,7 @@ func (r *Roc) HanldeRequest(w http.ResponseWriter, req *http.Request, eventWrite
 		rocResponse, err = r.handleReadRequest(rocRequest)
 	}
 	if err != nil {
-		return fmt.Errorf("handle request returned %v", err)
+		return fmt.Errorf("handle request: %w", err)
 	}
 	defer rocResponse.DecRef()
 
