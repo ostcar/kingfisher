@@ -234,8 +234,6 @@ func roc_fx_get(url *RocStr) C.struct_ResultBytesString {
 		return getResultError(fmt.Errorf("status code: %d", resp.StatusCode))
 	}
 
-	fmt.Println(resp.StatusCode)
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return getResultError(err)
