@@ -39,7 +39,7 @@ func Run(ctx context.Context, addr string, r *roc.Roc, db database.Database) err
 	}
 	log.Printf("Webserver is listening on: http://%s", addrToLog)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		return fmt.Errorf("HTTP server failed: %v", err)
+		return fmt.Errorf("HTTP server failed: %w", err)
 	}
 
 	return <-wait
@@ -47,8 +47,8 @@ func Run(ctx context.Context, addr string, r *roc.Roc, db database.Database) err
 
 func handler(rocApp *roc.Roc, db database.Database) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := rocApp.HanldeRequest(w, r, db.EventsWriter); err != nil {
-			http.Error(w, "Internal Server Error. The Admin was informed.", 500)
+		if err := rocApp.HandleRequest(w, r, db.EventsWriter); err != nil {
+			http.Error(w, "Internal Server Error", 500)
 			log.Printf("Internal Server Error: %v", err)
 			return
 		}
