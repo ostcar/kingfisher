@@ -10,13 +10,17 @@ module [
     to_iso_8601,
 ]
 
-# Copied from https://github.com/roc-lang/basic-webserver Version 0.18
+# Based on https://github.com/roc-lang/basic-webserver Version 0.18
 
 import Host
 import InternalDateTime
 
 ## Stores a timestamp as nanoseconds since UNIX EPOCH
-Utc := I128 implements [Inspect]
+Utc := I128 implements [
+        Inspect,
+        Decoding { decoder },
+        Encoding { to_encoder },
+    ]
 
 ## Duration since UNIX EPOCH
 now! : {} => Utc
@@ -25,6 +29,7 @@ now! = |{}|
 
 # Constant number of nanoseconds in a millisecond
 nanos_per_milli = 1_000_000
+nanos_per_second = 1_000_000_000
 
 ## Convert Utc timestamp to milliseconds
 to_millis_since_epoch : Utc -> I128
@@ -34,7 +39,7 @@ to_millis_since_epoch = |@Utc(nanos)|
 ## Convert milliseconds to Utc timestamp
 from_millis_since_epoch : I128 -> Utc
 from_millis_since_epoch = |millis|
-    @Utc((millis * nanos_per_milli))
+    @Utc(millis * nanos_per_milli)
 
 ## Convert Utc timestamp to nanoseconds
 to_nanos_since_epoch : Utc -> I128
@@ -44,6 +49,29 @@ to_nanos_since_epoch = |@Utc(nanos)|
 ## Convert nanoseconds to Utc timestamp
 from_nanos_since_epoch : I128 -> Utc
 from_nanos_since_epoch = @Utc
+
+to_encoder : Utc -> Encoder fmt where fmt implements EncoderFormatting
+to_encoder = |utc|
+    Encode.i64(utc |> to_seconds)
+
+# decoder : Decoder Utc fmt where fmt implements DecoderFormatting
+decoder =
+    Decode.custom |bytes, fmt|
+        bytes
+        |> Decode.from_bytes_partial(fmt)
+        |> |{ result, rest }| {
+            result: result |> Result.map_ok(|seconds| seconds |> from_seconds()),
+            rest,
+        }
+
+from_seconds : I64 -> Utc
+from_seconds = |seconds|
+    @Utc((seconds |> Num.to_i128) * nanos_per_second)
+
+to_seconds : Utc -> I64
+to_seconds = |@Utc(nanos)|
+    (nanos // nanos_per_second)
+    |> Num.to_i64
 
 ## Calculate milliseconds between two Utc timestamps
 delta_as_millis : Utc, Utc -> U128
