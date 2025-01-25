@@ -5,5 +5,5 @@ module [
 import Host
 
 line! : Str => {}
-line! = \str ->
+line! = |str|
     Host.stdout_line!(str)

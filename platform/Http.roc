@@ -58,26 +58,26 @@ RequestFromHost : {
 }
 
 method_to_str : RequestMethod -> Str
-method_to_str = \method ->
+method_to_str = |method|
     when method is
         Options -> "Options"
         Get -> "Get"
-        Post _ -> "Post"
-        Put _ -> "Put"
-        Delete _ -> "Delete"
+        Post(_) -> "Post"
+        Put(_) -> "Put"
+        Delete(_) -> "Delete"
         Head -> "Head"
         Trace -> "Trace"
         Connect -> "Connect"
-        Patch _ -> "Patch"
+        Patch(_) -> "Patch"
 
 request_from_host : RequestFromHost -> Request
-request_from_host = \from_host ->
+request_from_host = |from_host|
     method =
         when from_host.method is
-            Post -> Post Host.save_event!
-            Put -> Put Host.save_event!
-            Delete -> Delete Host.save_event!
-            Patch -> Patch Host.save_event!
+            Post -> Post(Host.save_event!)
+            Put -> Put(Host.save_event!)
+            Delete -> Delete(Host.save_event!)
+            Patch -> Patch(Host.save_event!)
             Options -> Options
             Get -> Get
             Head -> Head
