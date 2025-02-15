@@ -23,7 +23,7 @@ Use the platform with the following roc-application-header:
 
 ```roc
 app [init_model, update_model, handle_request!, Model] {
-    webserver: platform "https://github.com/ostcar/kingfisher/releases/download/v0.0.4/SHF-u_wznLGLRLdWiQ3XhuOwzrfXye9PhMGWmr36zzk.tar.br",
+    webserver: platform "https://github.com/ostcar/kingfisher/releases/download/v0.0.6/CGvtit0XrLnoN00TVk3Ggseg8nXTe9UykuX7dAcETmw.tar.br",
 }
 ```
 
