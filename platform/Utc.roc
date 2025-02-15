@@ -56,13 +56,15 @@ to_encoder = |utc|
 
 # decoder : Decoder Utc fmt where fmt implements DecoderFormatting
 decoder =
-    Decode.custom |bytes, fmt|
-        bytes
-        |> Decode.from_bytes_partial(fmt)
-        |> |{ result, rest }| {
-            result: result |> Result.map_ok(|seconds| seconds |> from_seconds()),
-            rest,
-        }
+    Decode.custom(
+        |bytes, fmt|
+            bytes
+            |> Decode.from_bytes_partial(fmt)
+            |> |{ result, rest }| {
+                result: result |> Result.map_ok(|seconds| seconds |> from_seconds()),
+                rest,
+            },
+    )
 
 from_seconds : I64 -> Utc
 from_seconds = |seconds|

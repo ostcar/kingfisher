@@ -108,7 +108,8 @@ The format of the events will probably change in the future.
 To build the platform from source, you need to install
 [roc](https://www.roc-lang.org/install), [go](https://go.dev/dl/) and
 [zig](https://ziglang.org/learn/getting-started/#installing-zig). Zig is used to
-crosscompile the go code. At the moment, it only works with zig `0.11.0`.
+crosscompile the go code. Zig `0.14.0` is needed (not released at the moment of
+writing).
 
 Run:
 

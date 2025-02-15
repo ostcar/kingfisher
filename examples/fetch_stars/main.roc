@@ -20,7 +20,7 @@ handle_request! = |_request, _model|
             list =
                 response_body
                 |> Decode.from_bytes(Json.utf8)
-                |> Result.map_err?(|_| ErrDecodingGitHubResponse)
+                |> Result.map_err(|_| ErrDecodingGitHubResponse)?
 
             Ok(
                 {
